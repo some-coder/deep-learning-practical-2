@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Any, cast, Dict, Tuple
 
 from tf_agents.environments import py_environment
+from tf_agents.environments import tf_py_environment
 from tf_agents.environments import utils
 from tf_agents.specs import array_spec
 from tf_agents.trajectories import time_step as ts
@@ -21,8 +22,8 @@ class DykeRepairEnv(py_environment.PyEnvironment):
 		"""
 		Actions a dyke repair agent can take.
 		"""
-		NO_OPERATION: np.int32 = np.int32(0)
-		REPAIR: np.int32 = np.int32(1)
+		NO_OPERATION = np.int32(0)
+		REPAIR = np.int32(1)
 
 	def __init__(
 			self,
@@ -170,8 +171,8 @@ class DykeRepairEnv(py_environment.PyEnvironment):
 
 		# determine where to apply maintenance
 		a: np.array = cast(action, np.array)
-		maintenance: np.array = self._state[a == DykeRepairEnv.Action.REPAIR]
-		maintenance_indices: np.array = np.where(a == DykeRepairEnv.Action.REPAIR)[0]
+		maintenance: np.array = self._state[a == DykeRepairEnv.Action.REPAIR.value]
+		maintenance_indices: np.array = np.where(a == DykeRepairEnv.Action.REPAIR.value)[0]
 
 		# update previous maintenances, compute cost of actions
 		self._update__previous_maintains(maintenance_indices)
@@ -215,6 +216,12 @@ class DykeRepairEnv(py_environment.PyEnvironment):
 
 
 if __name__ == '__main__':
+	# change these parameters to check the environment out
+	validate: bool = False
+	test_environment: bool = False
+	apply_tensorflow_wrap: bool = True
+
+	# create the environment
 	environment: py_environment.PyEnvironment = \
 		DykeRepairEnv(
 			len_dyke_1=np.int32(3),
@@ -225,4 +232,26 @@ if __name__ == '__main__':
 			society_cost=np.float64(20.0),
 			alpha=np.float64(1.0),
 			beta=np.float64(0.5))
-	utils.validate_py_environment(environment, episodes=5)
+
+	# validate it
+	if validate:
+		utils.validate_py_environment(environment, episodes=5)  # has been validated
+
+	# run some testing steps
+	if test_environment:
+		no_repair_action: np.array = np.array([DykeRepairEnv.Action.NO_OPERATION.value], dtype=np.int32)
+		time_step: ts.TimeStep = environment.reset()
+		print(time_step)
+		cumulative_reward: np.float64 = time_step.reward
+
+		for _ in range(5):
+			time_step = environment.step(no_repair_action)
+			print(time_step)
+			cumulative_reward += time_step.reward
+
+		print('Final reward: %.5lf' % cumulative_reward)
+
+	# wrap the environment into TensorFlow for parallelization
+	if apply_tensorflow_wrap:
+		tf_environment: tf_py_environment.TFPyEnvironment = \
+			tf_py_environment.TFPyEnvironment(environment)
