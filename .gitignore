@@ -1,0 +1,33 @@
+# Binaries, executables
+*
+!*.*
+!*/
+
+
+# Dataset, model saves
+dataset/
+models/
+
+
+# Photos, PDFs, CSVs
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.csv
+!results/*.csv
+!results/**/*.csv
+
+# R
+.Rhistory
+
+
+# MacOS
+.DS_Store
+__MACOSX
+*.dSYM
+
+
+# JetBrains
+.idea
+
