@@ -37,7 +37,7 @@ class DykeRepairEnv(py_environment.PyEnvironment):
 			beta: np.float64,
 			delta_t: np.float64 = np.float64(1e-2),
 			threshold: np.float64 = np.float64(1e0),
-			run_duration: np.float64 = np.float64(1e0)) -> None:
+			run_duration: np.float64 = np.float64(3e0)) -> None:
 		"""
 		Constructs a new dyke repair reinforcement learning environment.
 
@@ -74,8 +74,8 @@ class DykeRepairEnv(py_environment.PyEnvironment):
 		# set TensorFlow Agents-related fields
 		self._action_spec: array_spec.BoundedArraySpec = \
 			array_spec.BoundedArraySpec(
-				shape=(1,), dtype=np.int32, minimum=0, maximum=len(DykeRepairEnv.Action) - 1,
-				name='action')
+				shape=(self.len_dyke_1 + self.len_dyke_2,), dtype=np.int32, minimum=0,
+				maximum=len(DykeRepairEnv.Action) - 1, name='action')
 		self._observation_spec: array_spec.BoundedArraySpec = \
 			array_spec.BoundedArraySpec(
 				shape=(self.len_dyke_1 + self.len_dyke_2,), dtype=np.float64, minimum=0.0,
@@ -191,10 +191,11 @@ class DykeRepairEnv(py_environment.PyEnvironment):
 				scale=self.beta,
 				size=self._state.shape)
 		new_state[maintenance_indices] = 0.0
+		self._state = new_state
 		if self._should_terminate:
-			return ts.termination(new_state, reward=-cost)
+			return ts.termination(self._state, reward=-cost)
 		else:
-			return ts.transition(new_state, reward=-cost)
+			return ts.transition(self._state, reward=-cost)
 
 	def get_info(self) -> Any:
 		raise NotImplementedError("The dyke maintenance environment does not yield information.")
