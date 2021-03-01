@@ -8,13 +8,8 @@ from matplotlib.axes import Axes
 from model import DykeRepairEnv
 from typing import Any, Dict, Iterator, Tuple
 
-from tf_agents.agents.dqn import dqn_agent
 from tf_agents.environments import py_environment
 from tf_agents.environments import tf_py_environment
-from tf_agents.networks import sequential
-from tf_agents.specs import tensor_spec
-from tf_agents.trajectories import time_step as ts
-from tf_agents.utils import common
 
 
 if __name__ == '__main__':
@@ -42,24 +37,27 @@ if __name__ == '__main__':
 			threshold=thr)
 	py_eval_env: py_environment.PyEnvironment = deepcopy(py_train_env)
 
-	# sample from the environment by doing nothing continuously
-	noop_action: np.array = np.array(dkl * [DykeRepairEnv.Action.NO_OPERATION.value], dtype=np.int32)
-	statuses: np.array = np.ndarray(shape=(0, dkl))
-	state: Dict[str, Any] = py_train_env.get_state()
-	statuses = np.vstack((statuses, state['state']))
-	for _ in range(iter_length):
-		time_step: ts.TimeStep = py_train_env.step(noop_action)
-		state = py_train_env.get_state()
-		statuses = np.vstack((statuses, state['state']))
+	tf_train: tf_py_environment.TFPyEnvironment = \
+		tf_py_environment.TFPyEnvironment(environment=py_train_env)
 
-	# plot the state of the environment over time
-	out: Tuple[Figure, Axes] = plt.subplots()
-	color: Iterator[np.array] = iter(plt.cm.get_cmap(name='rainbow')(X=np.linspace(start=0, stop=1, num=dkl)))
-	for key in range(0, dkl):
-		c: np.array = next(color)  # 1-by-4 RGBA array
-		plt.step(x=np.arange(0, statuses.shape[0]), y=statuses[:, key], color=c)
-	out[1].set_ylim(top=thr)
-	plt.xlabel('Time')
-	plt.ylabel('Deterioration level')
-	plt.title('Deterioration Levels over Time')
-	plt.show(block=True)
+	# sample from the environment by doing nothing continuously
+	# noop_action: np.array = np.array(dkl * [DykeRepairEnv.Action.NO_OPERATION.value], dtype=np.int32)
+	# statuses: np.array = np.ndarray(shape=(0, dkl))
+	# state: Dict[str, Any] = py_train_env.get_state()
+	# statuses = np.vstack((statuses, state['state']))
+	# for _ in range(iter_length):
+	# 	time_step: ts.TimeStep = py_train_env.step(noop_action)
+	# 	state = py_train_env.get_state()
+	# 	statuses = np.vstack((statuses, state['state']))
+	#
+	# # plot the state of the environment over time
+	# out: Tuple[Figure, Axes] = plt.subplots()
+	# color: Iterator[np.array] = iter(plt.cm.get_cmap(name='rainbow')(X=np.linspace(start=0, stop=1, num=dkl)))
+	# for key in range(0, dkl):
+	# 	c: np.array = next(color)  # 1-by-4 RGBA array
+	# 	plt.step(x=np.arange(0, statuses.shape[0]), y=statuses[:, key], color=c)
+	# out[1].set_ylim(top=thr)
+	# plt.xlabel('Time')
+	# plt.ylabel('Deterioration level')
+	# plt.title('Deterioration Levels over Time')
+	# plt.show(block=True)
