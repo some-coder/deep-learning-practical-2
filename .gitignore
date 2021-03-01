@@ -9,6 +9,13 @@ dataset/
 models/
 
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints
+
+
 # Photos, PDFs, CSVs
 *.png
 *.jpg
