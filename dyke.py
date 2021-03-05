@@ -1,63 +1,90 @@
 import numpy as np
 import tensorflow as tf
+import pandas as pd
 
 from copy import deepcopy
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
-from model import DykeRepairEnv
 from typing import Any, Dict, Iterator, Tuple
 
-from tf_agents.environments import py_environment
-from tf_agents.environments import tf_py_environment
+from environment import Environment
+from non_agent import Non_Agent
+from tensorforce_agent import Tensorforce_Agent
+from tpro_agent import TPRO_Agent
 
 
 if __name__ == '__main__':
-	# set seed for reproducibility
-	np.random.seed(1)
+	tf.random.set_seed(999999)
+	dyke_1_m = 20
+	dyke_2_n = 20
+	alpha = 5
+	beta = 0.6
+	"""
+	properties gamma increment
+	mean = alpha * beta * time
+	std. deviation = alpha * beta^2 * time 
+	"""
+	c_pm = 1
+	c_cm = 4
+	c_f = 4
+	c_s = 1000
 
-	# set parameters
-	dk1: np.int32 = np.int32(3)
-	dk2: np.int32 = np.int32(5)
-	dkl: np.int32 = dk1 + dk2
-	iter_length: int = int(1.75e2)
-	thr: np.float64 = np.float64(1e0)
+	delta_t = 0.01
+	L = 1
 
 	# set up the environment
-	py_train_env: py_environment.PyEnvironment = \
-		DykeRepairEnv(
-			len_dyke_1=dk1,
-			len_dyke_2=dk2,
-			prevent_cost=np.float64(0.5),
-			correct_cost=np.float64(1.5),
-			fixed_cost=np.float64(0.1),
-			society_cost=np.float64(20.0),
-			alpha=np.float64(5.0),
-			beta=np.float64(0.2),
-			threshold=thr)
-	py_eval_env: py_environment.PyEnvironment = deepcopy(py_train_env)
+	env: Environment = Environment(
+		m=dyke_1_m,
+		n=dyke_2_n,
+		alpha=alpha,
+		beta=beta,
+		c_pm=c_pm,
+		c_cm=c_cm,
+		c_f=c_f,
+		c_s=c_s,
+		delta_t=delta_t,
+		L=L
+	)
+	# number of episodes
+	max_episode_timesteps = 50000
 
-	tf_train: tf_py_environment.TFPyEnvironment = \
-		tf_py_environment.TFPyEnvironment(environment=py_train_env)
+	# set the agent
+	#agent = Non_Agent(maintenance_interval=0.7, dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n)
+	agent = Tensorforce_Agent(dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n)
+	#agent = TPRO_Agent(dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n, max_episode_timesteps=max_episode_timesteps)
 
+	# set params
+	time = 0
+	statuses = []
+	terminal = False
 	# sample from the environment by doing nothing continuously
-	# noop_action: np.array = np.array(dkl * [DykeRepairEnv.Action.NO_OPERATION.value], dtype=np.int32)
-	# statuses: np.array = np.ndarray(shape=(0, dkl))
-	# state: Dict[str, Any] = py_train_env.get_state()
-	# statuses = np.vstack((statuses, state['state']))
-	# for _ in range(iter_length):
-	# 	time_step: ts.TimeStep = py_train_env.step(noop_action)
-	# 	state = py_train_env.get_state()
-	# 	statuses = np.vstack((statuses, state['state']))
-	#
+	for j in range(0, max_episode_timesteps):
+		state = env.observe_state()
+		actions = agent.agent.act(states=np.array(state)).tolist()  # tensorforce agent
+		#actions = agent.act(time=time) # fixed interval agent
+		succesfull = env.take_action(actions=actions)
+		reward = env.get_reward()
+		agent.agent.observe(terminal=terminal, reward=np.array(-reward))
+		#statuses.append([time, reward]) # collect reward
+		statuses.append([time] + state) # collect states
+		time += delta_t
+
+	df = pd.DataFrame(statuses)
+	#df.columns = ["time"] + ["reward"]
+	df.columns = ["time"] + [f"dyke_1_{i}" for i in range(1, (dyke_1_m+1))] + [f"dyke_2_{i}" for i in range(1, (dyke_2_n+1))]
+
 	# # plot the state of the environment over time
-	# out: Tuple[Figure, Axes] = plt.subplots()
-	# color: Iterator[np.array] = iter(plt.cm.get_cmap(name='rainbow')(X=np.linspace(start=0, stop=1, num=dkl)))
-	# for key in range(0, dkl):
-	# 	c: np.array = next(color)  # 1-by-4 RGBA array
-	# 	plt.step(x=np.arange(0, statuses.shape[0]), y=statuses[:, key], color=c)
-	# out[1].set_ylim(top=thr)
-	# plt.xlabel('Time')
-	# plt.ylabel('Deterioration level')
-	# plt.title('Deterioration Levels over Time')
-	# plt.show(block=True)
+	out: Tuple[Figure, Axes] = plt.subplots()
+	color: Iterator[np.array] = iter(plt.cm.get_cmap(name='rainbow')(X=np.linspace(start=0, stop=1, num=(dyke_1_m + dyke_1_m))))
+	for key in range(0, (dyke_1_m + dyke_1_m)):
+		c: np.array = next(color)  # 1-by-4 RGBA array
+		#plt.step(x=df.loc[:,"time"], y=df.loc[:,"reward"], color=c)
+		plt.step(x=df.loc[:, "time"], y=df.iloc[:, 1:-1], color=c)
+	#out[1].set_ylim(top=c_s)
+	#out[1].set_ylim(top=L+delta_t)
+	plt.xlabel('Time')
+	plt.ylabel('Deterioration level')
+	#plt.ylabel('Reward')
+	plt.title('Deterioration Levels over Time')
+	plt.show(block=True)
