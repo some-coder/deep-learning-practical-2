@@ -16,18 +16,20 @@ from tpro_agent import TPRO_Agent
 
 if __name__ == '__main__':
 	tf.random.set_seed(999999)
-	dyke_1_m = 20
-	dyke_2_n = 20
+	dyke_1_m = 10
+	dyke_2_n = 10
 	alpha = 5
-	beta = 0.6
+	beta = 0.01 # small variance=0.0005
+	# beta = 0.1 # medium variance=0.05
+	# beta = 0.4472139 # large variance=1.0000
 	"""
 	properties gamma increment
 	mean = alpha * beta * time
-	std. deviation = alpha * beta^2 * time 
+	variance = alpha * beta^2 * time 
 	"""
 	c_pm = 1
 	c_cm = 4
-	c_f = 4
+	c_f = 5
 	c_s = 1000
 
 	delta_t = 0.01
@@ -47,7 +49,7 @@ if __name__ == '__main__':
 		L=L
 	)
 	# number of episodes
-	max_episode_timesteps = 50000
+	max_episode_timesteps = 40000
 
 	# set the agent
 	#agent = Non_Agent(maintenance_interval=0.7, dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n)
@@ -66,25 +68,25 @@ if __name__ == '__main__':
 		succesfull = env.take_action(actions=actions)
 		reward = env.get_reward()
 		agent.agent.observe(terminal=terminal, reward=np.array(-reward))
-		#statuses.append([time, reward]) # collect reward
-		statuses.append([time] + state) # collect states
+		statuses.append([time, reward]) # collect reward
+		#statuses.append([time] + state) # collect states
 		time += delta_t
 
 	df = pd.DataFrame(statuses)
-	#df.columns = ["time"] + ["reward"]
-	df.columns = ["time"] + [f"dyke_1_{i}" for i in range(1, (dyke_1_m+1))] + [f"dyke_2_{i}" for i in range(1, (dyke_2_n+1))]
+	df.columns = ["time"] + ["reward"]
+	#df.columns = ["time"] + [f"dyke_1_{i}" for i in range(1, (dyke_1_m+1))] + [f"dyke_2_{i}" for i in range(1, (dyke_2_n+1))]
 
 	# # plot the state of the environment over time
 	out: Tuple[Figure, Axes] = plt.subplots()
 	color: Iterator[np.array] = iter(plt.cm.get_cmap(name='rainbow')(X=np.linspace(start=0, stop=1, num=(dyke_1_m + dyke_1_m))))
 	for key in range(0, (dyke_1_m + dyke_1_m)):
 		c: np.array = next(color)  # 1-by-4 RGBA array
-		#plt.step(x=df.loc[:,"time"], y=df.loc[:,"reward"], color=c)
-		plt.step(x=df.loc[:, "time"], y=df.iloc[:, 1:-1], color=c)
+		plt.step(x=df.loc[:,"time"], y=df.loc[:,"reward"], color=c)
+		#plt.step(x=df.loc[:, "time"], y=df.iloc[:, 1:-1], color=c)
 	#out[1].set_ylim(top=c_s)
 	#out[1].set_ylim(top=L+delta_t)
 	plt.xlabel('Time')
-	plt.ylabel('Deterioration level')
-	#plt.ylabel('Reward')
+	#plt.ylabel('Deterioration level')
+	plt.ylabel('Reward')
 	plt.title('Deterioration Levels over Time')
 	plt.show(block=True)
