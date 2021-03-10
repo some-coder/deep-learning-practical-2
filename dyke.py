@@ -8,8 +8,10 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from typing import Any, Dict, Iterator, Tuple
 
+from auto_encoder import dyke_auto_encoder
 from environment import Environment
 from non_agent import Non_Agent
+from tensorflow.keras.models import Model
 from tensorforce_agent import Tensorforce_Agent
 from tpro_agent import TPRO_Agent
 
@@ -36,36 +38,46 @@ if __name__ == '__main__':
 	L = 1
 
 	# set up the environment
-	env: Environment = Environment(
-		m=dyke_1_m,
-		n=dyke_2_n,
-		alpha=alpha,
-		beta=beta,
-		c_pm=c_pm,
-		c_cm=c_cm,
-		c_f=c_f,
-		c_s=c_s,
-		delta_t=delta_t,
-		L=L
-	)
+	env_params: Dict[str, Any] = \
+		{
+			'm': dyke_1_m,
+			'n': dyke_2_n,
+			'alpha': alpha,
+			'beta': beta,
+			'c_pm': c_pm,
+			'c_cm': c_cm,
+			'c_f': c_f,
+			'c_s': c_s,
+			'delta_t': delta_t,
+			'L': L
+		}
+	env: Environment = Environment(**env_params)
+
 	# number of episodes
-	max_episode_timesteps = 40000
+	max_episode_time_steps = int(4e4)
+
+	# train an auto-encoder to supply later
+	dyke_enc: Model = dyke_auto_encoder(
+		dyke_env_params=env_params,
+		num_samples=max_episode_time_steps,
+		encoding_size=5)
 
 	# set the agent
-	#agent = Non_Agent(maintenance_interval=0.7, dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n)
-	agent = Tensorforce_Agent(dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n)
-	#agent = TPRO_Agent(dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n, max_episode_timesteps=max_episode_timesteps)
+	# agent = Non_Agent(maintenance_interval=0.7, dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n)
+	agent = Tensorforce_Agent(dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n, auto_encoder=dyke_enc)
+	# agent = TPRO_Agent(dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n, max_episode_timesteps=max_episode_timesteps)
 
 	# set params
 	time = 0
 	statuses = []
 	terminal = False
+
 	# sample from the environment by doing nothing continuously
-	for j in range(0, max_episode_timesteps):
+	for j in range(0, max_episode_time_steps):
 		state = env.observe_state()
 		actions = agent.agent.act(states=np.array(state)).tolist()  # tensorforce agent
 		#actions = agent.act(time=time) # fixed interval agent
-		succesfull = env.take_action(actions=actions)
+		successful = env.take_action(actions=actions)
 		reward = env.get_reward()
 		agent.agent.observe(terminal=terminal, reward=np.array(-reward))
 		statuses.append([time, reward]) # collect reward
