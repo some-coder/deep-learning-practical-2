@@ -1,7 +1,6 @@
 import numpy as np
 
 from copy import deepcopy
-from enum import Enum
 from typing import Any, cast, Dict, List, Optional, Tuple
 
 from tf_agents.environments.py_environment import PyEnvironment
@@ -18,21 +17,16 @@ class DykeEnvironment(PyEnvironment):
 	"""
 	A reinforcement learning environment simulating dyke maintenance.
 
-	In this particular simulation, two dykes simultaneously need to be supervised and, if needed,
+	In this particular simulation, multiple dykes simultaneously need to be supervised and, if needed,
 	repaired. Dyke segments are modelled according to i.i.d. gamma-distributed random variables,
 	together forming a stationary stochastic process. Multiple costs are associated to the consequences of
-	repairing or not repairing the two dykes.
+	repairing or not repairing the dykes.
 
 	Most methods in this class are direct implementations of the PyEnvironment class of
 	TensorFlow Agents; we refer to their documentation to see what most of the methods do.
 	"""
 
-	class DykeAction(Enum):
-		"""
-		An action a dyke maintainer can undertake.
-		"""
-		NO_OPERATION = np.int8(0)
-		REPAIR = np.int8(1)
+	NO_OPERATION: np.int64 = 0
 
 	def __init__(
 			self,
@@ -79,9 +73,11 @@ class DykeEnvironment(PyEnvironment):
 		self._rng: np.random.Generator = ran_gen if ran_gen is not None else np.random.default_rng()
 		self.timeout_time = timeout_time
 		# Python Environment fields.
-		self._action_spec: ArraySpec = ArraySpec(
-			shape=(self._dykes.shape[0],),
-			dtype=np.int8,
+		self._action_spec: ArraySpec = BoundedArraySpec(
+			shape=(),  # scalar dimension
+			dtype=np.int64,
+			minimum=DykeEnvironment.NO_OPERATION,
+			maximum=DykeEnvironment.NO_OPERATION + self._dykes.shape[0],
 			name='action')
 		self._observation_spec: BoundedArraySpec = BoundedArraySpec(
 			shape=(self._dykes.shape[0],),
@@ -135,30 +131,32 @@ class DykeEnvironment(PyEnvironment):
 
 	def _step(self, action: NestedArraySpec) -> TimeStep:
 		cost: np.float64 = np.float64(0.0)
-		action: np.ndarray
-		dyke_action: DykeEnvironment.DykeAction
+		action: np.int64
 		# update the state of the dykes
-		for dyke_action in DykeEnvironment.DykeAction:
-			indices: np.ndarray = action == dyke_action.value
-			if dyke_action == DykeEnvironment.DykeAction.NO_OPERATION:
-				self._dykes[indices] += [self._gamma_increment() for _ in range(indices.sum())]
-				self._times[indices] += [self.delta_t for _ in range(indices.sum())]
-			elif dyke_action == DykeEnvironment.DykeAction.REPAIR:
-				self._dykes[indices] = [0.0 for _ in range(indices.sum())]
-				self._times[indices] = [0.0 for _ in range(indices.sum())]
+		no_repair_indices: np.ndarray = np.arange(start=0, stop=self._dykes.shape[0], step=1)
+		no_repair_indices = no_repair_indices[no_repair_indices != (action - DykeEnvironment.NO_OPERATION - 1)]
+		for segment_index in no_repair_indices:
+			self._dykes[segment_index] = \
+				min(self._dykes[segment_index] + self._gamma_increment(), self._breach_level)
+			self._times[segment_index] += self.delta_t
+		if action != DykeEnvironment.NO_OPERATION:
+			# agent wants to repair a single dyke segment
+			self._dykes[action - DykeEnvironment.NO_OPERATION - 1] = 0.0
+			self._times[action - DykeEnvironment.NO_OPERATION - 1] = 0.0
 		# compute costs
-		cost += self._repair_cost * (self._dykes >= self._breach_level).sum()
-		cost += self._prevent_cost * (action == DykeEnvironment.DykeAction.REPAIR.value).sum()
+		cost += self._repair_cost * (self._dykes == self._breach_level).sum()  # TODO: Then automatically repair?
+		cost += self._prevent_cost if action == DykeEnvironment.NO_OPERATION else 0.0
 		cost += self._fixed_cost if self._maintenance_required(action) else 0.0
 		cost += self._societal_cost if np.all(self._number_of_breaches_per_dyke() > 0) else 0.0
 		# return to the calling agent
 		episode_end: bool = self._t > self.timeout_time
 		self._t += self.delta_t
-		return transition(self._dykes, -cost) if episode_end else termination(self._dykes, -cost)
+		return termination(self._dykes, -cost) if episode_end else transition(self._dykes, -cost)
 
 	def _reset(self) -> TimeStep:
 		self._dykes = np.zeros(shape=(self.len_dykes.sum(),), dtype=np.float64)
 		self._times = np.zeros(shape=(self.len_dykes.sum(),), dtype=np.float64)
+		self._t = 0.0
 		return restart(observation=self._dykes)
 
 	def _gamma_increment(self) -> np.float64:
@@ -186,10 +184,29 @@ class DykeEnvironment(PyEnvironment):
 		"""
 		Determines whether the agent will currently perform maintenance.
 
-		:param action: The actions the agent plans to undertake.
+		:param action: The action the agent plans to undertake.
 		:return: The question's answer.
 		"""
-		return np.any(self._dykes > self._breach_level) or np.any(action == DykeEnvironment.DykeAction.REPAIR.value)
+		return np.any(self._dykes > self._breach_level) or action != DykeEnvironment.NO_OPERATION
+
+
+def dyke_environment_demo_params() -> Dict[str, Any]:
+	"""
+	Yields a set of parameters suitable for demoing the DykeEnvironment.
+
+	:return: The parameters stored in a map.
+	"""
+	return {
+		'len_dykes': [10, 10],
+		'gamma_shape': 5.0,
+		'gamma_scale': 0.01,
+		'prevent_cost': 1.0,
+		'repair_cost': 4.0,
+		'fixed_cost': 5.0,
+		'societal_cost': 1000.0,
+		'delta_t': 0.01,
+		'breach_level': 1.0,
+		'ran_gen': np.random.default_rng(seed=123)}
 
 
 def visualise_dyke_environment(dyke_env: DykeEnvironment, stop: float) -> None:
@@ -203,33 +220,26 @@ def visualise_dyke_environment(dyke_env: DykeEnvironment, stop: float) -> None:
 	det_levels: np.ndarray = np.zeros(shape=(steps, dyke_env.len_dykes.sum()))
 	rewards: np.ndarray = np.zeros(shape=(steps,))
 	for time in range(steps):
-		act: np.ndarray = DykeEnvironment.DykeAction.NO_OPERATION.value * np.ones(shape=(dyke_env.len_dykes.sum(),))
+		act: np.float64 = DykeEnvironment.NO_OPERATION
 		ts: TimeStep = dyke_env.step(action=act)
 		det_levels[time, :] = ts.observation
 		rewards[time] = ts.reward
 	sp: Tuple[Figure, Tuple[Axes, Axes]] = plt.subplots(nrows=2, ncols=1)
 	x_values: np.ndarray = np.arange(start=0.0, step=dyke_env.delta_t, stop=steps * dyke_env.delta_t)
-	sp[1][0].set_title('Dyke deterioration levels')
+	sp[1][0].set_title('Dyke Deterioration over Time')
 	for dyke in range(dyke_env.len_dykes.sum()):
 		sp[1][0].step(x_values, det_levels[:, dyke])
-	sp[1][1].set_title('Rewards')
+	sp[1][0].set_xlabel('Dyke deterioration level')
+	sp[1][0].set_xlabel('Epoch')
+	sp[1][1].set_title('Reward over Time (not cumulative)')
 	sp[1][1].plot(x_values, rewards)
+	sp[1][1].set_ylabel('Reward')
+	sp[1][1].set_xlabel('Epoch')
 	sp[0].tight_layout()
 	plt.show(block=True)
 
 
 if __name__ == '__main__':
-	params: Dict[str, Any] = {
-		'len_dykes': [10, 10],
-		'gamma_shape': 5.0,
-		'gamma_scale': 0.01,
-		'prevent_cost': 1.0,
-		'repair_cost': 4.0,
-		'fixed_cost': 5.0,
-		'societal_cost': 1000.0,
-		'delta_t': 0.01,
-		'breach_level': 1.0,
-		'ran_gen': np.random.default_rng(seed=123)}
-	env = DykeEnvironment(**params)
-	visualise_dyke_environment(env, stop=2e0)
+	env = DykeEnvironment(**dyke_environment_demo_params())
+	visualise_dyke_environment(env, stop=3e-1)
 	# environment has been validated and tested in a TensorFlow environment wrapper
