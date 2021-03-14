@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from dyke_environment import DykeEnvironment, dyke_environment_demo_params
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from tensorflow import Variable
 from tensorflow.keras.activations import relu
@@ -21,14 +21,12 @@ from tf_agents.specs.tensor_spec import from_spec
 from tf_agents.trajectories.trajectory import from_transition
 from tf_agents.utils.common import element_wise_squared_loss, function
 from tf_agents.trajectories.time_step import TimeStep
+from tf_agents.drivers.dynamic_episode_driver import DynamicEpisodeDriver
 
 
 # replay buffer settings
-_REP_BUF_PREFETCH_NUM: int = 3  # number of time steps to prefetch during DQN training
-_REP_BUF_PARALLEL_CALLS: int = 2  # number of elements the replay buffer should process in parallel
-_REP_BUF_NUM_STEPS: int = 2  # IMPORTANT. Leave as-is.
-_REP_BUF_BATCH_SIZE: int = 64
-_REP_BUF_MAX_STEPS: int = int(1e3)
+_REP_BUF_BATCH_SIZE: int = 4
+_REP_BUF_NUM_STEPS: int = 2
 
 
 def fully_connected_dyke_dqn_agent_network(sizes: Tuple[int, ...]) -> List[Layer]:
@@ -71,96 +69,68 @@ def dyke_dqn_agent(env: TFPyEnvironment, layers: Optional[List[Layer]] = None) -
 		train_step_counter=train_step_counter)
 
 
-def average_return_over_episodes(env: TFPyEnvironment, policy: TFPolicy, num_episodes: int = 10) -> float:
-	"""
-	Computes the average reward over the specified number of episodes.
+def _dyke_replay_buffer(env: TFPyEnvironment, agent: DqnAgent, steps_per_episode: int) -> TFUniformReplayBuffer:
+	return TFUniformReplayBuffer(
+		data_spec=agent.collect_data_spec,
+		batch_size=env.batch_size,
+		max_length=steps_per_episode)
 
-	:param env: The environment to assign to the agent.
-	:param policy: The policy to supply the agent with.
-	:param num_episodes: The number of episodes to average reward over.
-	:return: The averaged reward.
-	"""
-	total_return: np.float64 = np.float64(0.0)
-	for i in range(num_episodes):
+
+def _evaluate_dyke_agent(env: TFPyEnvironment, agent: DqnAgent, num_episodes: int = 10) -> np.ndarray:
+	returns: np.ndarray = np.zeros(shape=(num_episodes,))
+	for ep in range(num_episodes):
 		time_step: TimeStep = env.reset()
-		episode_return: np.float64 = np.float64(0.0)
-		t: int = 0
+		episode_return: float = 0.0
 		while not time_step.is_last():
-			action_step = policy.action(time_step)
+			action_step = agent.policy.action(time_step)
 			time_step = env.step(action_step.action)
 			episode_return += time_step.reward
-			t += 1
-		total_return += episode_return
-	avg_return = total_return / num_episodes
-	return float(avg_return)
+		returns[ep] = episode_return
+	return returns
 
 
-def _collect_step(env: TFPyEnvironment, policy: TFPolicy, buffer: TFUniformReplayBuffer) -> None:
-	"""
-	Saves a single time step to the replay buffer.
-
-	:param env: The environment from which to get the time step.
-	:param policy: The policy used by the agent producing the step.
-	:param buffer: The buffer to save the step to.
-	"""
-	time_step: TimeStep = env.current_time_step()
-	action_for_step = policy.action(time_step)
-	next_time_step: TimeStep = env.step(action_for_step.action)
-	trj = from_transition(time_step, action_for_step, next_time_step)
-	buffer.add_batch(trj)
-
-
-def _collect_data(env: TFPyEnvironment, policy: TFPolicy, buffer: TFUniformReplayBuffer, steps: int) -> None:
-	"""
-	Saves multiple time steps to the replay buffer.
-
-	:param env: The environment from which to get the time step.
-	:param policy: The policy used by the agent producing the step.
-	:param buffer: The buffer to save the step to.
-	:param steps: The number of steps to add to the replay buffer.
-	"""
-	for _ in range(steps):
-		_collect_step(env, policy, buffer)
-
-
-def train_agent(
+def train_dyke_agent(
 		train_env: TFPyEnvironment,
 		eval_env: TFPyEnvironment,
 		agent: DqnAgent,
-		num_pre_eval_episodes: int,
-		episodes: int,
+		train_steps: int,
 		steps_per_episode: int,
-		eval_interval: int,
-		num_eval_episodes: int) -> List[float]:
-	# establish the replay buffer and dataset
-	replay_buffer = TFUniformReplayBuffer(
-		data_spec=dqn_agent.collect_data_spec,
-		batch_size=train_tf_env.batch_size,
-		max_length=_REP_BUF_MAX_STEPS)
-	dataset: tf.data.Dataset = replay_buffer.as_dataset(
-		num_parallel_calls=_REP_BUF_PARALLEL_CALLS,
-		sample_batch_size=_REP_BUF_BATCH_SIZE,
-		num_steps=_REP_BUF_NUM_STEPS)
-	dataset.prefetch(_REP_BUF_PREFETCH_NUM)
-	iterator = iter(dataset)
-	# train the agent
-	agent.train = function(agent.train)  # for optimal performance
-	agent.train_step_counter.assign(0)
-	print('Computing average return once before training..')
-	avg_return = average_return_over_episodes(eval_env, agent.policy, num_episodes=num_pre_eval_episodes)
-	returns: List[float] = [avg_return]
-	print('Training..')
-	for i in range(episodes):
-		print('\tIteration %d' % (i,))
-		_collect_data(train_env, agent.collect_policy, replay_buffer, steps_per_episode)
-		experience, _ = next(iterator)
-		_ = agent.train(experience).loss
-		step = agent.train_step_counter.numpy()
-		if step % eval_interval == 0:
-			avg_return = average_return_over_episodes(eval_env, agent.policy, num_eval_episodes)
-			# print('[step %d] Average return is %.3lf.' % (step, avg_return))
-			returns.append(avg_return)
-	return returns
+		eval_episodes: int) -> Dict[str, Any]:
+	"""
+	Trains the DQN agent on the dyke maintenance task.
+
+	:param train_env: The training environment.
+	:param eval_env: The environment for testing agent performance.
+	:param agent: The agent.
+	:param train_steps: The number of training steps to use.
+	:param steps_per_episode: The number of time steps that can be taken in a single dyke environment episode.
+	:param eval_episodes: The number of episodes to use per evaluation.
+	"""
+	losses: np.ndarray = np.zeros(shape=(train_steps, steps_per_episode))
+	evaluations: np.ndarray = np.zeros(shape=(train_steps, eval_episodes))
+	for step in range(train_steps):
+		print('Step %d/%d' % (step + 1, train_steps))
+		rep_buf = _dyke_replay_buffer(train_env, agent, steps_per_episode)
+		obs: Tuple = (rep_buf.add_batch,)
+		_ = DynamicEpisodeDriver(
+			env=train_env,
+			policy=agent.collect_policy,
+			observers=obs,
+			num_episodes=1).run()  # experience a single episode using the agent's current configuration
+		dataset: tf.data.Dataset = rep_buf.as_dataset(
+			sample_batch_size=_REP_BUF_BATCH_SIZE,
+			num_steps=_REP_BUF_NUM_STEPS)
+		iterator = iter(dataset)
+		for tr in range(steps_per_episode):
+			trajectories, _ = next(iterator)
+			losses[step, tr] = agent.train(experience=trajectories).loss
+			print('\tAddressed tr = %d/%d' % (tr + 1, steps_per_episode))
+		evaluations[step, :] = _evaluate_dyke_agent(eval_env, agent, eval_episodes)
+	return {
+		'loss-mus': losses.mean(axis=1),
+		'loss-sds': losses.std(axis=1),
+		'eval-mus': evaluations.mean(axis=1),
+		'eval-sds': evaluations.std(axis=1)}
 
 
 if __name__ == '__main__':
@@ -172,20 +142,9 @@ if __name__ == '__main__':
 	dqn_agent = dyke_dqn_agent(train_tf_env)  # could also have been eval env
 	dqn_agent.initialize()
 
-	random_policy = RandomTFPolicy(train_tf_env.time_step_spec(), train_tf_env.action_spec())
-	random_policy_return = average_return_over_episodes(train_tf_env, random_policy)
-	print('Average random policy return (10 episodes) %.3lf' % (random_policy_return,))
-	train_tf_env.reset()
-
-	print('Beginning main program.')
-	res = train_agent(
-		train_env=train_tf_env,
-		eval_env=eval_tf_env,
-		agent=dqn_agent,
-		num_pre_eval_episodes=5,
-		episodes=10,
-		steps_per_episode=int(10),
-		eval_interval=5,
-		num_eval_episodes=100)
-	print('Resulting rewards:')
-	print(res)
+	spe: int = int(np.ceil(train_py_env.timeout_time / train_py_env.delta_t))
+	di = train_dyke_agent(train_tf_env, eval_tf_env, dqn_agent, 10, spe, 15)
+	print(di['loss-mus'])
+	print(di['loss-sds'])
+	print(di['eval-mus'])
+	print(di['eval-sds'])
