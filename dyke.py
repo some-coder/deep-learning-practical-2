@@ -30,9 +30,9 @@ if __name__ == '__main__':
 	variance = alpha * beta^2 * time 
 	"""
 	c_pm = 1
-	c_cm = 4
-	c_f = 5
-	c_s = 1000
+	c_cm = 1
+	c_f = 0
+	c_s = 0
 
 	delta_t = 0.01
 	L = 1
@@ -72,17 +72,41 @@ if __name__ == '__main__':
 	statuses = []
 	terminal = False
 
+	states_data = []
+
 	# sample from the environment by doing nothing continuously
 	for j in range(0, max_episode_time_steps):
 		state = env.observe_state()
 		actions = agent.agent.act(states=np.array(state)).tolist()  # tensorforce agent
 		#actions = agent.act(time=time) # fixed interval agent
 		successful = env.take_action(actions=actions)
+
+		state_after_action = env.observe_state()
 		reward = env.get_reward()
 		agent.agent.observe(terminal=terminal, reward=np.array(-reward))
 		statuses.append([time, reward]) # collect reward
 		#statuses.append([time] + state) # collect states
 		time += delta_t
+
+		# storing the time, reward, actions and dyke states
+		states_data.append([time] + [reward] + state_after_action + actions)
+
+
+
+
+
+	# preparing dyke states into csvs
+	states_data = pd.DataFrame(states_data)
+	states_data.columns = ["time"] + ["reward"]  +\
+						  [f"dyke_1_{i}" for i in range(1, (dyke_1_m+1))] + [f"dyke_2_{i}" for i in range(1, (dyke_2_n+1))] +\
+						  [f"action_dyke_1_{i}" for i in range(1, (dyke_1_m + 1))] + [f"action_dyke_2_{i}" for i in range(1, (dyke_2_n + 1))]
+
+	states_data.to_csv(f"states_data.csv", index=False)
+	csv_info = open("csv_info.txt", "w+")
+	csv_info.write(str(env_params))
+	csv_info.close()
+
+
 
 	df = pd.DataFrame(statuses)
 	df.columns = ["time"] + ["reward"]

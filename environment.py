@@ -70,7 +70,7 @@ class Environment(object):
         for i, X_t, in enumerate(self.state_1_x_t):
             action = self.actions_1[i]
             if action == 1:
-                self.state_1_x_t[i]  = 0
+                self.state_1_x_t[i] = 0
                 self.state_1_t[i] = 0
             elif action == 0:
                 self.state_1_x_t[i] += self.gamma_increment()
@@ -79,7 +79,7 @@ class Environment(object):
         # second dyke update
         for i, X_t, in enumerate(self.state_2_x_t):
             action = self.actions_2[i]
-            if action == 1: # maintain
+            if action == 1:  # maintain
                 self.state_2_x_t[i] = 0
                 self.state_2_t[i] = 0
             elif action == 0:   # do nothing
@@ -104,7 +104,7 @@ class Environment(object):
                 cost += self.c_cm
                 time += self.state_1_t[i]
                 self.state_1_x_t[i] = 0
-                self.state_1_t[i]  = 0
+                self.state_1_t[i] = 0
             else: # preventive maintenance
                 if self.actions_1[i] == 1:
                     maintenance = True
