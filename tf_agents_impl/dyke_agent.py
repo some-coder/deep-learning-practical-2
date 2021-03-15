@@ -121,10 +121,15 @@ def train_dyke_agent(
 			sample_batch_size=_REP_BUF_BATCH_SIZE,
 			num_steps=_REP_BUF_NUM_STEPS)
 		iterator = iter(dataset)
-		for tr in range(steps_per_episode):
-			trajectories, _ = next(iterator)
-			losses[step, tr] = agent.train(experience=trajectories).loss
-			print('\tAddressed tr = %d/%d' % (tr + 1, steps_per_episode))
+		i: int = 0
+		while True:
+			try:
+				trajectories, _ = next(iterator)
+				i += 1
+				losses[step, i] = agent.train(experience=trajectories).loss
+			except StopIteration:
+				print("Reached end at %d" % (i,))
+				break
 		evaluations[step, :] = _evaluate_dyke_agent(eval_env, agent, eval_episodes)
 	return {
 		'loss-mus': losses.mean(axis=1),
@@ -142,8 +147,14 @@ if __name__ == '__main__':
 	dqn_agent = dyke_dqn_agent(train_tf_env)  # could also have been eval env
 	dqn_agent.initialize()
 
-	spe: int = int(np.ceil(train_py_env.timeout_time / train_py_env.delta_t))
-	di = train_dyke_agent(train_tf_env, eval_tf_env, dqn_agent, 10, spe, 15)
+	spe: int = 1000  # int(np.ceil(train_py_env.timeout_time / train_py_env.delta_t))
+	di = train_dyke_agent(
+		train_env=train_tf_env,
+		eval_env=eval_tf_env,
+		agent=dqn_agent,
+		train_steps=100,
+		steps_per_episode=spe,
+		eval_episodes=1)
 	print(di['loss-mus'])
 	print(di['loss-sds'])
 	print(di['eval-mus'])

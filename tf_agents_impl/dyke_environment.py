@@ -151,6 +151,8 @@ class DykeEnvironment(PyEnvironment):
 		# return to the calling agent
 		episode_end: bool = self._t > self.timeout_time
 		self._t += self.delta_t
+		if episode_end:
+			print('Should terminate (%.3lf >= %.3lf).' % (self._t, self._breach_level))
 		return termination(self._dykes, -cost) if episode_end else transition(self._dykes, -cost)
 
 	def _reset(self) -> TimeStep:
