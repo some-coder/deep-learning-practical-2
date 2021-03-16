@@ -14,7 +14,7 @@ AUTO_ENCODER_NODES: int = 5
 
 class Tensorforce_Agent:
 
-	def __init__(self, dyke_1_m: int, dyke_2_n: int, auto_encoder: Optional[Model] = None) -> None:
+	def __init__(self, dyke_1_m: int, dyke_2_n: int, L: float, delta_t: float, auto_encoder: Optional[Model] = None) -> None:
 		tfc_policy: Union[Dict[str, Any], LayerSpecification]
 		if auto_encoder is not None:
 			tfc_policy = \
@@ -27,22 +27,23 @@ class Tensorforce_Agent:
 							'trainable': False
 						},
 						# The default layers. Kept as-is here.
-						{'type': 'dense', 'size': 64, 'activation': 'tanh'},
-						{'type': 'dense', 'size': 64, 'activation': 'tanh'}
+						{'type': 'dense', 'size': 64, 'activation': 'relu'},
+						{'type': 'dense', 'size': 64, 'activation': 'relu'},
+						{'type': 'dense', 'size': 64, 'activation': 'relu'}
 					]}
 		else:
 			tfc_policy = {'network': 'auto'}
 		self.agent = Agent.create(
 			agent='tensorforce',
-			states=dict(type='float', shape=(dyke_1_m + dyke_2_n,), min_value=0.0),
+			states=dict(type='float', shape=(dyke_1_m + dyke_2_n,), min_value=0.0, max_value=(L+delta_t)),
 			actions=dict(type='int', shape=(dyke_1_m + dyke_2_n,), num_values=2),
 			memory=10000,
-			update=dict(unit='timesteps', batch_size=64),
-			optimizer=dict(type='adam', learning_rate=3e-4),
+			update=dict(unit='timesteps', batch_size=32),
+			optimizer=dict(type='adam', learning_rate=3e-6),
 			policy=tfc_policy,
 			objective='policy_gradient',
-			reward_estimation=dict(horizon=20))
-
+			exploration=0.05,  # prob of choosing a random action
+			reward_estimation=dict(horizon=300))
 
 if __name__ == '__main__':
 	env_params: Dict[str, Any] = \

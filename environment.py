@@ -38,6 +38,9 @@ class Environment(object):
         self.delta_t = delta_t
         self.L = L
 
+        self.max_reward = self.c_s + self.c_f + (self.c_cm * (self.n + self.m))
+        self.reward_base = 1.02
+
         self.state_1_x_t = [0] * self.m  # first dyke [X(t),...,]
         self.state_2_x_t = [0] * self.n  # second dyke [X(t),...,]
         self.state_1_t = [0] * self.m  # first dyke [t,...,]
@@ -45,10 +48,22 @@ class Environment(object):
 
         self.actions_1 = [0]
         self.actions_2 = [0]
+        self.current_reward = 0
+        self.current_mbtf = 0
 
         # set seed
         self.random_generator = random.Random()
         self.random_generator.seed(1234)
+
+        # warm-up state:
+        self.warmup_state()
+
+    def warmup_state(self):
+        for i, X_t, in enumerate(self.state_1_x_t):
+            self.state_1_x_t[i] = self.random_generator.uniform(0, (self.L+self.delta_t))
+        for i, X_t, in enumerate(self.state_2_x_t):
+            self.state_2_x_t[i] = self.random_generator.uniform(0, (self.L+self.delta_t))
+        return
 
     # functions for the agent
     def observe_state(self):
@@ -61,33 +76,10 @@ class Environment(object):
         return True
 
     def get_reward(self):
-        cost, cum_time = self.evaluate_state()
-        return cost
+        return self.reward_base**(self.max_reward - self.current_reward)
 
     # internal functions
     def update_state(self):
-        # first dyke update
-        for i, X_t, in enumerate(self.state_1_x_t):
-            action = self.actions_1[i]
-            if action == 1:
-                self.state_1_x_t[i] = 0
-                self.state_1_t[i] = 0
-            elif action == 0:
-                self.state_1_x_t[i] += self.gamma_increment()
-                self.state_1_t[i] += self.delta_t
-
-        # second dyke update
-        for i, X_t, in enumerate(self.state_2_x_t):
-            action = self.actions_2[i]
-            if action == 1:  # maintain
-                self.state_2_x_t[i] = 0
-                self.state_2_t[i] = 0
-            elif action == 0:   # do nothing
-                self.state_2_x_t[i] += self.gamma_increment()
-                self.state_2_t[i] += self.delta_t
-        return
-
-    def evaluate_state(self):
         cost = 0
         time = 0
 
@@ -98,47 +90,75 @@ class Environment(object):
 
         # first dyke update
         for i, X_t, in enumerate(self.state_1_x_t):
-            if X_t > self.L: # dyke breached
-                maintenance = True
+            # control if dyke is breached
+            if self.state_1_x_t[i] > self.L:
                 nr_breaks_first_dyke += 1
-                cost += self.c_cm
+
+            # perform action
+            if self.actions_1[i] == 1: # maintenance
+                maintenance = True
+                if self.state_1_x_t[i] > self.L:
+                    cost += self.c_cm  # corrective maintenance
+                else:
+                    cost += self.c_pm  # preventive maintenance
                 time += self.state_1_t[i]
+
+                # repair dyke
                 self.state_1_x_t[i] = 0
                 self.state_1_t[i] = 0
-            else: # preventive maintenance
-                if self.actions_1[i] == 1:
-                    maintenance = True
-                    cost += self.c_pm
-                    time += self.state_1_t[i]
-                    self.state_1_x_t[i] = 0
-                    self.state_1_t[i] = 0
-                # else --> do nothing
+
+            elif self.actions_1[i] == 0: # do nothing
+                # only detoriate breached dyke
+                if self.state_1_x_t[i] < self.L:
+                    self.state_1_x_t[i] += self.gamma_increment()
+                    self.state_1_t[i] += self.delta_t
+                    # avoid overshooting
+                    if self.state_1_x_t[i] >= self.L:
+                        self.state_1_x_t[i] = self.L + self.delta_t
+                else:
+                    self.state_1_t[i] += self.delta_t
 
         # second dyke update
         for i, X_t, in enumerate(self.state_2_x_t):
-            if X_t > self.L: # dyke breached
-                maintenance = True
+            # control if dyke breached
+            if self.state_2_x_t[i] > self.L:
                 nr_breaks_second_dyke += 1
-                cost += self.c_cm
+
+            # action
+            if self.actions_2[i] == 1: # maintenance
+                maintenance = True
+                if self.state_2_x_t[i] > self.L:
+                    cost += self.c_cm  # corrective maintenance
+                else:
+                    cost += self.c_pm  # preventive maintenance
                 time += self.state_2_t[i]
+
+                # repair dyke
                 self.state_2_x_t[i] = 0
                 self.state_2_t[i] = 0
-            else: # preventive maintenance
-                if self.actions_2[i] == 1:
-                    maintenance = True
-                    cost += self.c_pm
-                    time += self.state_2_t[i]
-                    self.state_2_x_t[i] = 0
-                    self.state_2_t[i] = 0
-                # else --> do nothing
 
-        if maintenance: # pay fixed cost
+            elif self.actions_1[i] == 0:  # do nothing
+                # only deteriorate breached dyke
+                if self.state_2_x_t[i] < self.L:
+                    self.state_2_x_t[i] += self.gamma_increment()
+                    self.state_2_t[i] += self.delta_t
+                    # avoid overshooting
+                    if self.state_2_x_t[i] >= self.L:
+                        self.state_2_x_t[i] = self.L + self.delta_t
+                else:
+                    self.state_2_t[i] += self.delta_t
+
+        if maintenance:  # pay fixed cost
             cost += self.c_f
 
-        if nr_breaks_first_dyke > 0 and nr_breaks_second_dyke > 0: # pay societal cost
+        if nr_breaks_first_dyke > 0 and nr_breaks_second_dyke > 0:  # pay societal cost
             cost += self.c_s
-        return cost, time
+
+        # update rewards
+        self.current_reward = cost
+        self.current_mbtf = time # mbtf = current time between failure, currently not used
+        return
 
     def gamma_increment(self):
-        return self.random_generator.gammavariate(alpha=self.alpha * self.delta_t,beta=self.beta)
+        return self.random_generator.gammavariate(alpha=(self.alpha * self.delta_t),beta=self.beta)
 
