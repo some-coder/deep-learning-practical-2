@@ -3,7 +3,7 @@ library(viridis)
 library(reshape2)
 library(ggplot2)
 
-
+info <- read_file("github/deep-learning-practical-2/csv_info.txt")
 states_data <- read_csv("github/deep-learning-practical-2/states_data.csv") #change to some path
 
 states <- states_data[-c(23:42)]
@@ -43,8 +43,17 @@ heatmap_actions <- ggplot(actions_long, aes(time, action, fill=actions)) +
   ggtitle("Actions of agent on dyke segments over time") + 
   theme(plot.title = element_text(hjust = 0.5)) + theme_bw()
 
+
+
+ggplot(states, aes(time, reward)) + geom_line() + 
+  ggtitle("Rewards over time") + 
+  theme(plot.title = element_text(hjust = 0.5)) + theme_bw()
+
+ggplot(states, aes(time, dyke_1_1)) +
+  geom_line()+geom_hline(yintercept=1.00, colour='red') + 
+  ggtitle("Deterioration of dyke 1_1") + 
+  theme(plot.title = element_text(hjust = 0.5)) + theme_bw()
+
+
 heatmap_dykes
 heatmap_actions
-ggplot(states, aes(time, reward)) + geom_line()
-ggplot(states, aes(time, dyke_1_1)) + geom_line()+geom_hline(yintercept=1.00, colour='red')
-View(states_long)
