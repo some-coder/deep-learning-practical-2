@@ -29,6 +29,7 @@ class Tensorforce_Agent:
 						# The default layers. Kept as-is here.
 						{'type': 'dense', 'size': 64, 'activation': 'relu'},
 						{'type': 'dense', 'size': 64, 'activation': 'relu'},
+						{'type': 'dense', 'size': 64, 'activation': 'relu'},
 						{'type': 'dense', 'size': 64, 'activation': 'relu'}
 					]}
 		else:
@@ -39,7 +40,7 @@ class Tensorforce_Agent:
 			actions=dict(type='int', shape=(dyke_1_m + dyke_2_n,), num_values=2),
 			memory=10000,
 			update=dict(unit='timesteps', batch_size=32),
-			optimizer=dict(type='adam', learning_rate=3e-6),
+			optimizer=dict(type='adam', learning_rate=3e-4),
 			policy=tfc_policy,
 			objective='policy_gradient',
 			exploration=0.05,  # prob of choosing a random action
@@ -49,6 +50,7 @@ if __name__ == '__main__':
 	env_params: Dict[str, Any] = \
 		{
 			'm': 10,
+
 			'n': 10,
 			'alpha': 5.0,
 			'beta': 0.01,

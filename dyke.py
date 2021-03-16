@@ -52,7 +52,7 @@ if __name__ == '__main__':
 	env: Environment = Environment(**env_params)
 
 	# number of episodes
-	max_episode_time_steps = int(4e4)
+	max_episode_time_steps = int(5e4)
 
 	# train an auto-encoder to supply later
 	dyke_enc: Model = dyke_auto_encoder(
@@ -61,13 +61,13 @@ if __name__ == '__main__':
 		encoding_size=5)
 
 	# set the agent
-	agent = Tensorforce_Agent(dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n, L=L, delta_t=delta_t, auto_encoder=dyke_enc)
-	#agent = TPRO_Agent(dyke_1_m=dyke_1_m,
-	#				   dyke_2_n=dyke_2_n,
-	#				   max_episode_timesteps=max_episode_time_steps,
-	#				   delta_t=delta_t,
-	#				   L=L,
-	#				   auto_encoder=dyke_enc)
+	#agent = Tensorforce_Agent(dyke_1_m=dyke_1_m, dyke_2_n=dyke_2_n, L=L, delta_t=delta_t, auto_encoder=dyke_enc)
+	agent = TPRO_Agent(dyke_1_m=dyke_1_m,
+					   dyke_2_n=dyke_2_n,
+					   max_episode_timesteps=max_episode_time_steps,
+					   delta_t=delta_t,
+					   L=L,
+					   auto_encoder=dyke_enc)
 
 	# set params
 	time = 0
@@ -105,9 +105,9 @@ if __name__ == '__main__':
 	out: Tuple[Figure, Axes] = plt.subplots()
 	color: Iterator[np.array] = iter(plt.cm.get_cmap(name='rainbow')(X=np.linspace(start=0, stop=1, num=(dyke_1_m + dyke_1_m))))
 	c: np.array = next(color)  # 1-by-4 RGBA array
-	plt.step(x=states_data.loc[:,"time"], y=states_data.loc[:,"reward"], color=c)
+	plt.step(x=states_data.loc[:,"time"], y=states_data.loc[:,"reward"], color='r')
 	c: np.array = next(color)  # 1-by-4 RGBA array
-	plt.step(x=states_data.loc[:, "time"], y=states_data.loc[:, "reward"].rolling(window=500).mean(), color=c)
+	plt.step(x=states_data.loc[:, "time"], y=states_data.loc[:, "reward"].rolling(window=500).mean(), color='k')
 	plt.xlabel('Time')
 	plt.ylabel('Reward')
 	plt.title('Deterioration Levels over Time')

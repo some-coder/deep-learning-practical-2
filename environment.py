@@ -76,7 +76,7 @@ class Environment(object):
         return True
 
     def get_reward(self):
-        return self.reward_base**(self.max_reward - self.current_reward)
+        return self.reward_base ** (self.max_reward - self.current_reward)
 
     # internal functions
     def update_state(self):
@@ -137,7 +137,7 @@ class Environment(object):
                 self.state_2_x_t[i] = 0
                 self.state_2_t[i] = 0
 
-            elif self.actions_1[i] == 0:  # do nothing
+            elif self.actions_2[i] == 0:  # do nothing
                 # only deteriorate breached dyke
                 if self.state_2_x_t[i] < self.L:
                     self.state_2_x_t[i] += self.gamma_increment()
@@ -156,7 +156,8 @@ class Environment(object):
 
         # update rewards
         self.current_reward = cost
-        self.current_mbtf = time # mbtf = current time between failure, currently not used
+        if time > 0:
+            self.current_mbtf = time / (sum(self.actions_1) + sum(self.actions_2)) # mbtf = mean time between failure
         return
 
     def gamma_increment(self):
