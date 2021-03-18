@@ -160,9 +160,10 @@ if __name__ == '__main__':
 	out: Tuple[Figure, Axes] = plt.subplots()
 	plt.step(x=states_data.loc[:, "time"], y=states_data.loc[:, "mean_reward"].rolling(window=500).mean(), color='k')
 	plt.xlabel('Time')
-	plt.ylabel('Reward')
+	plt.ylabel('Average Reward')
 	plt.title('Deterioration Levels over Time')
-	plt.show(block=True)
+	plt.savefig('reward_plot.png')
+
 
 	# provide essential experimental information
 	t_time = (time.time() - start_time)
