@@ -40,6 +40,7 @@ class Environment(object):
 
         self.max_reward = self.c_s + self.c_f + (self.c_cm * (self.n + self.m))
         self.reward_base = 1.02
+        self.risk_taking = 0.5 # most reward at the mean deterioration
 
         self.state_1_x_t = [0] * self.m  # first dyke [X(t),...,]
         self.state_2_x_t = [0] * self.n  # second dyke [X(t),...,]
@@ -49,7 +50,7 @@ class Environment(object):
         self.actions_1 = [0]
         self.actions_2 = [0]
         self.current_reward = 0
-        self.current_mbtf = 0
+        self.current_cum_time = 0
 
         # set seed
         self.random_generator = random.Random()
@@ -76,7 +77,7 @@ class Environment(object):
         return True
 
     def get_reward(self):
-        return self.reward_base ** (self.max_reward - self.current_reward)
+        return self.reward_base ** (self.max_reward - self.current_reward + self.current_cum_time)
 
     # internal functions
     def update_state(self):
@@ -111,12 +112,12 @@ class Environment(object):
                 # only detoriate breached dyke
                 if self.state_1_x_t[i] < self.L:
                     self.state_1_x_t[i] += self.gamma_increment()
-                    self.state_1_t[i] += self.delta_t
+                    self.state_1_t[i] += self.risk_taking
                     # avoid overshooting
                     if self.state_1_x_t[i] >= self.L:
                         self.state_1_x_t[i] = self.L + self.delta_t
                 else:
-                    self.state_1_t[i] += self.delta_t
+                    self.state_1_t[i] += self.risk_taking
 
         # second dyke update
         for i, X_t, in enumerate(self.state_2_x_t):
@@ -141,12 +142,12 @@ class Environment(object):
                 # only deteriorate breached dyke
                 if self.state_2_x_t[i] < self.L:
                     self.state_2_x_t[i] += self.gamma_increment()
-                    self.state_2_t[i] += self.delta_t
+                    self.state_2_t[i] += self.risk_taking
                     # avoid overshooting
                     if self.state_2_x_t[i] >= self.L:
                         self.state_2_x_t[i] = self.L + self.delta_t
                 else:
-                    self.state_2_t[i] += self.delta_t
+                    self.state_2_t[i] += self.risk_taking
 
         if maintenance:  # pay fixed cost
             cost += self.c_f
@@ -157,7 +158,7 @@ class Environment(object):
         # update rewards
         self.current_reward = cost
         if time > 0:
-            self.current_mbtf = time / (sum(self.actions_1) + sum(self.actions_2)) # mbtf = mean time between failure
+            self.current_cum_time = time / (sum(self.actions_1) + sum(self.actions_2)) # mbtf = mean time between failure
         return
 
     def gamma_increment(self):
