@@ -26,6 +26,7 @@ class DykeEnvironment(PyEnvironment):
 	TensorFlow Agents; we refer to their documentation to see what most of the methods do.
 	"""
 
+	_DEBUG: bool = True
 	NO_OPERATION: np.int64 = 0
 
 	def __init__(
@@ -54,7 +55,7 @@ class DykeEnvironment(PyEnvironment):
 		:param delta_t: The size of one time step.
 		:param breach_level: The deterioration level at which a dyke should breach.
 		:param ran_gen: Optional. A pseudo-random number generator to draw randomness from.
-		:param timeout_time: The time at which one dyke maintenance episode ends. Inclusive.
+		:param timeout_time: The time at which one dyke maintenance episode ends. Itself still included.
 		"""
 		super().__init__()
 		# Dyke environment fields.
@@ -136,23 +137,27 @@ class DykeEnvironment(PyEnvironment):
 		no_repair_indices: np.ndarray = np.arange(start=0, stop=self._dykes.shape[0], step=1)
 		no_repair_indices = no_repair_indices[no_repair_indices != (action - DykeEnvironment.NO_OPERATION - 1)]
 		for segment_index in no_repair_indices:
-			self._dykes[segment_index] = \
-				min(self._dykes[segment_index] + self._gamma_increment(), self._breach_level)
+			self._dykes[segment_index] = self._dykes[segment_index] + self._gamma_increment()
 			self._times[segment_index] += self.delta_t
 		if action != DykeEnvironment.NO_OPERATION:
 			# agent wants to repair a single dyke segment
 			self._dykes[action - DykeEnvironment.NO_OPERATION - 1] = 0.0
 			self._times[action - DykeEnvironment.NO_OPERATION - 1] = 0.0
-		# compute costs
-		cost += self._repair_cost * (self._dykes == self._breach_level).sum()  # TODO: Then automatically repair?
+		# compute costs, repair breached dykes
+		cost += self._repair_cost * (self._dykes >= self._breach_level).sum()  # TODO: Then automatically repair?
 		cost += self._prevent_cost if action == DykeEnvironment.NO_OPERATION else 0.0
 		cost += self._fixed_cost if self._maintenance_required(action) else 0.0
 		cost += self._societal_cost if np.all(self._number_of_breaches_per_dyke() > 0) else 0.0
+		self._repair_breached_dykes()
 		# return to the calling agent
-		episode_end: bool = self._t > self.timeout_time
+		episode_end: bool = (not np.allclose(self._t, self.timeout_time)) and self._t > self.timeout_time
+		# if episode_end:
+		# 	print('\tEnd reached: %.3lf' % (self._t,))
+		# else:
+		# 	print('\tTime %.3lf' % (self._t,))
+		# 	print('\tAction: %s' % ('Nothing' if action == DykeEnvironment.NO_OPERATION else str(action)))
+		# 	print('\tCost: %.3lf\n' % (cost,))
 		self._t += self.delta_t
-		if episode_end:
-			print('Should terminate (%.3lf >= %.3lf).' % (self._t, self._breach_level))
 		return termination(self._dykes, -cost) if episode_end else transition(self._dykes, -cost)
 
 	def _reset(self) -> TimeStep:
@@ -167,7 +172,10 @@ class DykeEnvironment(PyEnvironment):
 
 		:return: The Gamma process increment.
 		"""
-		return cast(np.float64, self._rng.gamma(size=(1,), shape=self._gamma_shape, scale=self._gamma_scale)[0])
+		if DykeEnvironment._DEBUG:
+			return np.float64(self._breach_level / 100.0)
+		else:
+			return cast(np.float64, self._rng.gamma(size=(1,), shape=self._gamma_shape, scale=self._gamma_scale)[0])
 
 	def _number_of_breaches_per_dyke(self) -> np.ndarray:
 		"""
@@ -179,7 +187,7 @@ class DykeEnvironment(PyEnvironment):
 		indices: List[int] = list(np.hstack((np.array([0]), np.cumsum(self.len_dykes) - 1)).astype(int))
 		ranges: List[Tuple[int, int]] = [(indices[i], indices[i + 1]) for i in range(len(indices) - 1)]
 		for index, ran in enumerate(ranges):
-			breaches[index] = (self._dykes[ran[0]:ran[1]] > self._breach_level).sum()
+			breaches[index] = (self._dykes[ran[0]:ran[1]] >= self._breach_level).sum()
 		return breaches
 
 	def _maintenance_required(self, action: np.ndarray) -> bool:
@@ -189,7 +197,15 @@ class DykeEnvironment(PyEnvironment):
 		:param action: The action the agent plans to undertake.
 		:return: The question's answer.
 		"""
-		return np.any(self._dykes > self._breach_level) or action != DykeEnvironment.NO_OPERATION
+		return np.any(self._dykes >= self._breach_level) or action != DykeEnvironment.NO_OPERATION
+
+	def _repair_breached_dykes(self) -> None:
+		"""
+		Resets the deterioration level of dykes above breach level back to zero.
+
+		No costs are incurred upon the agent; the caller is responsible for this!
+		"""
+		self._dykes[self._dykes >= self._breach_level] = 0.0
 
 
 def dyke_environment_demo_params() -> Dict[str, Any]:
