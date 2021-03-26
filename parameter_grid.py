@@ -1,14 +1,19 @@
+import copy as cp
 import itertools as it
 
-from agent import Agent, NonAgent, OurProximalPolicyAgent, AgentParameterMap, AgentParameterMapPair
+from agent import Agent, AgentParameterMap, AgentParameterMapPair, OurTensorForceAgent, \
+	OurProximalPolicyAgent, TensorForceModel
 from enum import Enum
 from environment import Environment
-from typing import cast, Set, Tuple, Type
-
-from tensorflow.keras import Model
+from typing import cast, Any, Dict, List, Set, Tuple, Type
 
 
 class NetworkSpecification:
+
+	_LAYER_MINIMUM: int = 2
+	_LSTM_HORIZON: int = int(1e1)  # Steps of temporal back-propagation. Makes back-propagation through time feasible.
+	_DENSE_NUM_NODES: int = 64
+	_DENSE_ACTIVATION: str = 'relu'
 
 	class NetworkType(Enum):
 		FEED_FORWARD = 'feed-forward'
@@ -16,28 +21,69 @@ class NetworkSpecification:
 
 	def __init__(self, net_type: NetworkType, num_layers: int, max_pooling: bool) -> None:
 		self._net_type = net_type
+		if num_layers < NetworkSpecification._LAYER_MINIMUM:
+			print('You need to specify at least %d layers (got %d).' % (NetworkSpecification._LAYER_MINIMUM, num_layers))
 		self._num_layers = num_layers
 		self._max_pooling = max_pooling
 
-	def build(self) -> Model:
-		raise NotImplementedError
+	def build(self) -> TensorForceModel:
+		layers: List[Dict[str, Any]] = []
+		mdl: TensorForceModel = {'network': layers}
+		if self._max_pooling:
+			layers.append({'type': 'pooling', 'reduction': 'max'})
+		if self._net_type == NetworkSpecification.NetworkType.RECURRENT:
+			layers.append({'type': 'rnn', 'cell': 'lstm', 'horizon': NetworkSpecification._LSTM_HORIZON})
+		else:
+			layers.append({
+				'type': 'dense', 'size': NetworkSpecification._DENSE_NUM_NODES,
+				'activation': NetworkSpecification._DENSE_ACTIVATION})
+		for _ in range(self._num_layers - NetworkSpecification._LAYER_MINIMUM):
+			layers.append({
+				'type': 'dense', 'size': NetworkSpecification._DENSE_NUM_NODES,
+				'activation': NetworkSpecification._DENSE_ACTIVATION})
+		return mdl
 
 	def __str__(self) -> str:
 		return 'NetworkSpec(type=\'%s\', num_layers=%d, max_pooling=%s)' % \
 			(self._net_type.value, self._num_layers, str(self._max_pooling))
 
 
+NetworkParameterization = Tuple[NetworkSpecification.NetworkType, int, bool]
+
+
 class AgentSpecification:
 
+	_REQUIRE_GRADIENT_CLIPPING: Tuple[Type[Agent], ...] = (OurTensorForceAgent,)
+
 	def __init__(self, agent: Type[Agent], params: AgentParameterMap) -> None:
-		self._agent = agent
-		self._params = params
+		self._type = agent
+		self.params = params
+
+	def complete_specification(
+			self,
+			env_spec: Dict[str, Any],
+			model: NetworkSpecification,
+			gradient_clipping: bool) -> None:
+		d: Dict[str, Any] = {'m': env_spec['m'], 'n': env_spec['n']}
+		keys: Tuple[str, ...] = tuple()
+		if self._type in (OurTensorForceAgent, OurProximalPolicyAgent):
+			keys += 'breach_level', 'delta_t'
+		for key in keys:
+			d[key] = env_spec[key]
+		self.params.update(d)
+		self.params.update({'model': model.build()})
+		if self._type in AgentSpecification._REQUIRE_GRADIENT_CLIPPING:
+			self.params.update({'use_gradient_clipping': gradient_clipping})
 
 	def build(self) -> Agent:
-		return self._agent(**self._params)
+		return self._type(**self.params)
 
 	def __str__(self) -> str:
-		return 'AgentSpec(agent=\'%s\', params=%s)' % (str(self._agent), str(self._params))
+		return 'AgentSpec(type=\'%s\', params=%s)' % (str(self._type), str(self.params))
+
+
+ConfigurationParameterization = \
+	Tuple[Environment.RewardFunction, float, bool, AgentParameterMapPair, NetworkSpecification]
 
 
 class Configuration:
@@ -49,11 +95,46 @@ class Configuration:
 			gradient_clipping: bool,
 			agent_spec: AgentSpecification,
 			network_spec: NetworkSpecification) -> None:
+		"""
+		Constructs a specification for an Environment-Agent combination.
+
+		Only a subset of the parameters of an ``agent.Agent`` need to be supplied. They are:
+
+		* ``save_path`` for ``agent.OurTensorForceAgent``,
+		* ``timeout_time`` and ``save_path`` for ``agent.OurProximalPolicyAgent``,
+		* ``maintenance_interval`` for ``agent.NonAgent``.
+
+		:param reward_fn: The reward function to use. Options are listed in
+			<tt>environment.Environment.RewardFunction</tt>.
+		:param learning_rate: The learning rate the agent should use.
+		:param gradient_clipping: Whether to let the agent use gradient clipping.
+		:param agent_spec: The agent and their specific parameters. See detailed comments above.
+		:param network_spec: The specification for the agent's network. Ignored for <tt>agent.NonAgent</tt>.
+		"""
 		self._reward_fn = reward_fn
 		self._learning_rate = learning_rate
 		self._gradient_clipping = gradient_clipping
-		self._agent_spec = agent_spec
+		self._agent_spec = agent_spec  # will need further information from an environment
 		self._network_spec = network_spec
+
+	def build(self, env_spec: Dict[str, Any]) -> Tuple[Environment, Agent]:
+		"""
+		Instantiates one Environment-Agent pair.
+
+		Supply all parameters to the `environment.Environment`, except the following, as these are already available
+		to this `Configuration` instance:
+
+		* `reward_fn`.
+
+		:param env_spec: Parameters to supply to <tt>environment.Environment</tt>. See detailed comments above.
+		:return: A two-tuple of <tt>environment.Environment</tt> and <tt>agent.Agent</tt>, respectively.
+		"""
+		env_dict: Dict[str, Any] = cp.deepcopy(env_spec)
+		env_dict.update({'reward_fn': self._reward_fn})
+		env_agent_spec = cp.deepcopy(self._agent_spec)
+		env_agent_spec.complete_specification(env_spec, self._network_spec, self._gradient_clipping)
+		print('Agent parameters now: %s.' % (str(env_agent_spec.params),))
+		return Environment(**env_dict), env_agent_spec.build()
 
 	def __str__(self) -> str:
 		return 'Configuration(rew_fn=%s, lr=%.3lf, g_clip=%s, agent_spec=%s, net_spec=%s)' % \
@@ -66,8 +147,11 @@ class Configuration:
 def network_specification_grid(
 		network_types: Set[NetworkSpecification.NetworkType],
 		layer_numbers: Set[int],
-		max_pooling_options: Set[bool]) -> Set[NetworkSpecification]:
-	return cast(Set[NetworkSpecification], set(it.product(network_types, layer_numbers, max_pooling_options)))
+		max_pooling_options: Set[bool]) -> Tuple[NetworkSpecification, ...]:
+	nss = cast(
+		Tuple[NetworkParameterization, ...],
+		tuple(it.product(network_types, layer_numbers, max_pooling_options)))
+	return tuple(NetworkSpecification(*net_par) for net_par in nss)
 
 
 def configuration_grid(
@@ -75,23 +159,12 @@ def configuration_grid(
 		learning_rates: Set[float],
 		gradient_clipping_options: Set[bool],
 		apm_pairs: Tuple[AgentParameterMapPair, ...],
-		net_specs: Set[NetworkSpecification]) -> Tuple[Configuration, ...]:
-	return cast(
-		Tuple[Configuration, ...],
+		net_specs: Tuple[NetworkSpecification]) -> Tuple[Configuration, ...]:
+	cps = cast(
+		Tuple[ConfigurationParameterization, ...],
 		tuple(it.product(reward_functions, learning_rates, gradient_clipping_options, apm_pairs, net_specs)))
-
-
-if __name__ == '__main__':
-	grid = configuration_grid(
-		reward_functions={Environment.RewardFunction.STANDARD},
-		learning_rates={1e-2, 1e-3},
-		gradient_clipping_options={True},
-		# Note: we do not have to specify all parameters for agents; we can fill those in for all agents later.
-		apm_pairs=(
-			(NonAgent, {'m': 5, 'n': 3, 'maintenance_interval': 5}),
-			(OurProximalPolicyAgent, {
-				'm': 5, 'n': 3, 'breach_level': 1e0, 'delta_t': 1e-2, 'timeout_time': int(1e2)})),
-		net_specs=network_specification_grid(
-			network_types={NetworkSpecification.NetworkType.FEED_FORWARD},
-			layer_numbers={2, 8},
-			max_pooling_options={False}))
+	out: Tuple[Configuration, ...] = tuple()
+	for con_par in cps:
+		ag_sp = AgentSpecification(con_par[3][0], con_par[3][1])
+		out += (Configuration(con_par[0], con_par[1], con_par[2], ag_sp, con_par[4]),)
+	return out

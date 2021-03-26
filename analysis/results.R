@@ -3,8 +3,8 @@ library(viridis)
 library(reshape2)
 library(ggplot2)
 
-info <- read_file("github/deep-learning-practical-2/csv_info.txt")
-states_data <- read_csv("github/deep-learning-practical-2/states_data.csv") #change to some path
+info <- read_file("github/deep-learning-practical-2/analysis/csv_info.txt")
+states_data <- read_csv("github/deep-learning-practical-2/analysis/states_data.csv") #change to some path
 
 states <- states_data[-c(23:42)]
 actions <- states_data[-c(3:22)]

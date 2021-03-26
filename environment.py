@@ -1,6 +1,7 @@
 import random
 
 from enum import Enum
+from typing import List
 
 
 class Environment:
@@ -13,17 +14,17 @@ class Environment:
 
 	def __init__(
 			self,
-			m,
-			n,
-			alpha,
-			beta,
-			c_pm,
-			c_cm,
-			c_f,
-			c_s,
-			delta_t,
-			breach_level,
-			reward_fn: RewardFunction = RewardFunction.STANDARD):
+			m: int,
+			n: int,
+			alpha: float,
+			beta: float,
+			c_pm: float,
+			c_cm: float,
+			c_f: float,
+			c_s: float,
+			delta_t: float,
+			breach_level: float,
+			reward_fn: RewardFunction = RewardFunction.STANDARD) -> None:
 		"""
 		Constructs a new dyke repair reinforcement learning environment.
 
@@ -52,12 +53,12 @@ class Environment:
 
 		self.max_reward = self.c_s + self.c_f + (self.c_cm * (self.n + self.m))
 		self.reward_base = 1.02
-		self.risk_taking = 0.5 # most reward at the mean deterioration
+		self.risk_taking = 0.5  # most reward at the mean deterioration
 
-		self.state_1_x_t = [0] * self.m  # first dyke [X(t),...,]
-		self.state_2_x_t = [0] * self.n  # second dyke [X(t),...,]
-		self.state_1_t = [0] * self.m  # first dyke [t,...,]
-		self.state_2_t = [0] * self.n  # second dyke [t,...,]
+		self.state_1_x_t: List[float] = [0.0] * self.m  # first dyke [X(t),...,]
+		self.state_2_x_t: List[float] = [0.0] * self.n  # second dyke [X(t),...,]
+		self.state_1_t: List[float] = [0.0] * self.m  # first dyke [t,...,]
+		self.state_2_t: List[float] = [0.0] * self.n  # second dyke [t,...,]
 
 		self.actions_1 = [0]
 		self.actions_2 = [0]
@@ -74,18 +75,17 @@ class Environment:
 		# reward function
 		self.reward_fn = reward_fn
 
-	def warmup_state(self):
+	def warmup_state(self) -> None:
 		for i, X_t, in enumerate(self.state_1_x_t):
 			self.state_1_x_t[i] = self.random_generator.uniform(0, (self.L+self.delta_t))
 		for i, X_t, in enumerate(self.state_2_x_t):
 			self.state_2_x_t[i] = self.random_generator.uniform(0, (self.L+self.delta_t))
-		return
 
 	# functions for the agent
-	def observe_state(self):
+	def observe_state(self) -> List[float]:
 		return self.state_1_x_t + self.state_2_x_t
 
-	def take_action(self, actions):
+	def take_action(self, actions) -> bool:
 		self.actions_1 = actions[:len(self.state_1_x_t)]
 		self.actions_2 = actions[len(self.state_1_x_t):]
 		self.update_state()
@@ -98,7 +98,7 @@ class Environment:
 			raise NotImplementedError('Reward function \'%s\' not implemented (yet).' % (str(self.reward_fn),))
 
 	# internal functions
-	def update_state(self):
+	def update_state(self) -> None:
 		cost = 0
 		time = 0
 
@@ -177,8 +177,6 @@ class Environment:
 		self.current_reward = cost
 		if time > 0:
 			self.current_cum_time = time / (sum(self.actions_1) + sum(self.actions_2)) # mbtf = mean time between failure
-		return
 
-	def gamma_increment(self):
+	def gamma_increment(self) -> float:
 		return self.random_generator.gammavariate(alpha=(self.alpha * self.delta_t),beta=self.beta)
-

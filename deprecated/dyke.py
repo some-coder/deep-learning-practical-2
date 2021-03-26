@@ -5,19 +5,15 @@ import socket
 import time
 from os import mkdir
 
-from copy import deepcopy
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
-from typing import Any, Dict, Iterator, Tuple
+from typing import Any, Dict, Tuple
 
-from auto_encoder import dyke_auto_encoder
+from deprecated.auto_encoder import dyke_auto_encoder
 from environment import Environment
-from non_agent import Non_Agent
 from tensorflow.keras.models import Model
-from tensorforce_agent import Tensorforce_Agent
-from ppo_agent import PPO_Agent
-
+from deprecated.tensorforce_agent import Tensorforce_Agent
 
 if __name__ == '__main__':
 	# set params
@@ -151,7 +147,7 @@ if __name__ == '__main__':
 
 	file_name = f"states_data.csv"
 	states_data.to_csv((path + file_name), index=False)
-	csv_info = open("csv_info.txt", "w+")
+	csv_info = open("../analysis/csv_info.txt", "w+")
 	csv_info.write(str(env_params))
 	csv_info.close()
 	print("all files successfully saved")
