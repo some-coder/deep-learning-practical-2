@@ -1,0 +1,5 @@
+numpy~=1.19.5
+Tensorforce~=0.6.3
+pandas~=1.1.0
+tensorflow~=2.4.1
+matplotlib~=3.4.0

@@ -15,9 +15,9 @@ if __name__ == '__main__':
 		# Note: not all parameters need to be supplied. See ``parameter_grid.Configuration`` for details.
 		apm_pairs=(
 			(NonAgent, {'maintenance_interval': 5}),
-			(OurTensorForceAgent, {'learning_rate': 1e-2, 'save_path': '.'}),
+			(OurTensorForceAgent, {'save_path': '.'}),
 			(OurProximalPolicyAgent, {
-				'learning_rate': 1e-2, 'timeout_time': timeout_time, 'save_path': '.'})),
+				'timeout_time': timeout_time, 'save_path': '.'})),
 		net_specs=network_specification_grid(
 			network_types={NetworkSpecification.NetworkType.FEED_FORWARD},
 			layer_numbers={2, 8},

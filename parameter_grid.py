@@ -36,7 +36,7 @@ class NetworkSpecification:
 			layers.append({
 				'type': 'dense', 'size': NetworkSpecification._DENSE_NUM_NODES,
 				'activation': NetworkSpecification._ACTIVATION})
-		for _ in range(self._num_layers - NetworkSpecification._LAYER_MINIMUM):
+		for _ in range(self._num_layers - (NetworkSpecification._LAYER_MINIMUM - (0 if self._max_pooling else 1))):
 			layers.append({
 				'type': 'dense', 'size': NetworkSpecification._DENSE_NUM_NODES,
 				'activation': NetworkSpecification._ACTIVATION})

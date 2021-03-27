@@ -66,8 +66,7 @@ class OurTensorForceAgent(Agent):
 			save_path: str,
 			model: TensorForceModel) -> None:
 		super(OurTensorForceAgent, self).__init__(m, n)
-		print('TensorForceAgent: Got m=%d, n=%d, breach_lvl=%.1lf, delta_t: %.2lf, lr=%3.lf, clip: %s, sp=%s, mdl=%s' %
-			(m, n, breach_level, delta_t, learning_rate, use_gradient_clipping, save_path, str(model)))
+		print('TensorForceAgent: Got learning rate %.3lf' % (learning_rate,))
 		self._breach_level = breach_level
 		self._delta_t = delta_t
 		self._save_path = save_path
@@ -131,8 +130,7 @@ class OurProximalPolicyAgent(Agent):
 			save_path: str,
 			model: TensorForceModel) -> None:
 		super(OurProximalPolicyAgent, self).__init__(m, n)
-		print('PPO: Got m=%d, n=%d, breach_lvl=%.1lf, delta_t: %.2lf, lr=%3.lf, timeout: %d, sp=%s, mdl=%s' %
-			(m, n, breach_level, delta_t, learning_rate, timeout_time, save_path, str(model)))
+		print('PPO: Got learning rate: %.3lf' % (learning_rate,))
 		self._breach_level = breach_level
 		self._delta_t = delta_t
 		self.timeout_time = timeout_time
