@@ -4,10 +4,9 @@
 !*/
 
 
-# Dataset, model saves
-dataset/
-models/
-
+# Agent models, results
+agent/
+results/
 
 # Python
 __pycache__/

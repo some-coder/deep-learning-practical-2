@@ -1,3 +1,5 @@
+import numpy as np
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple, Type
 
@@ -27,7 +29,7 @@ class Agent(ABC):
 		pass
 
 	@abstractmethod
-	def save(self, path: str, identifier: int) -> None:
+	def save(self, path: str, identifier: str) -> None:
 		pass
 
 
@@ -59,10 +61,13 @@ class OurTensorForceAgent(Agent):
 			n: int,
 			breach_level: float,
 			delta_t: float,
-			save_path: str,
+			learning_rate: float,
 			use_gradient_clipping: bool,
+			save_path: str,
 			model: TensorForceModel) -> None:
 		super(OurTensorForceAgent, self).__init__(m, n)
+		print('TensorForceAgent: Got m=%d, n=%d, breach_lvl=%.1lf, delta_t: %.2lf, lr=%3.lf, clip: %s, sp=%s, mdl=%s' %
+			(m, n, breach_level, delta_t, learning_rate, use_gradient_clipping, save_path, str(model)))
 		self._breach_level = breach_level
 		self._delta_t = delta_t
 		self._save_path = save_path
@@ -77,7 +82,7 @@ class OurTensorForceAgent(Agent):
 			update={'unit': 'timesteps', 'batch_size': OurTensorForceAgent._BATCH_SIZE},
 			optimizer={
 				'type': OurTensorForceAgent._OPTIMIZER_NAME,
-				'learning_rate': OurTensorForceAgent._OPTIMIZER_LEARNING_RATE,
+				'learning_rate': learning_rate,
 				'clipnorm':
 					OurTensorForceAgent._OPTIMIZER_GRADIENT_CLIP_THRESHOLD if use_gradient_clipping else None},
 			policy=self._model,
@@ -94,10 +99,10 @@ class OurTensorForceAgent(Agent):
 	def observe(self, reward: float, terminal: bool) -> int:
 		return self._tensor_force_agent.observe(reward, terminal)
 
-	def save(self, path: str, identifier: int) -> None:
+	def save(self, path: str, identifier: str) -> None:
 		self._tensor_force_agent.save(
 			directory=path,
-			filename='-'.join((OurTensorForceAgent.NAME, str(identifier))),
+			filename='-'.join((OurTensorForceAgent.NAME, identifier)),
 			format='numpy',
 			append='episodes')
 
@@ -121,38 +126,43 @@ class OurProximalPolicyAgent(Agent):
 			n: int,
 			breach_level: float,
 			delta_t: float,
+			learning_rate: float,
 			timeout_time: int,
 			save_path: str,
 			model: TensorForceModel) -> None:
 		super(OurProximalPolicyAgent, self).__init__(m, n)
+		print('PPO: Got m=%d, n=%d, breach_lvl=%.1lf, delta_t: %.2lf, lr=%3.lf, timeout: %d, sp=%s, mdl=%s' %
+			(m, n, breach_level, delta_t, learning_rate, timeout_time, save_path, str(model)))
 		self._breach_level = breach_level
 		self._delta_t = delta_t
-		self._timeout_time = timeout_time
+		self.timeout_time = timeout_time
 		self._save_path = save_path
-		self._model = model  # Apparently not used by the proximal policy agent...
+		self._model = model
 		self._ppo_agent: TensorForceAgent = TensorForceAgent.create(
 			agent=OurProximalPolicyAgent._SPECIFICATION_KEY,
 			states={
 				'type': 'float', 'shape': (self._m + self._n,), 'min_value': 0.0,
 				'max_value': self._breach_level + self._delta_t},
 			actions={'type': 'int', 'shape': (self._m + self._n,), 'num_values': OurProximalPolicyAgent._NUM_ACTIONS},
-			max_episode_timesteps=self._timeout_time,
+			max_episode_timesteps=self.timeout_time,
 			batch_size=OurProximalPolicyAgent._BATCH_SIZE,
-			learning_rate=OurProximalPolicyAgent._LEARNING_RATE,
+			learning_rate=learning_rate,
+			network=self._model,
 			saver=None if not OurProximalPolicyAgent._SAVE else {
 				'directory': self._save_path, 'filename': OurProximalPolicyAgent._SAVE_NAME,
 				'frequency': OurProximalPolicyAgent._SAVING_FREQUENCY})
 
 	def act(self, states: Any, time: int) -> List[Action]:
-		return self._ppo_agent.act(states=states).tolist()
+		out = self._ppo_agent.act(states=states)
+		return out.tolist()
 
 	def observe(self, reward: float, terminal: bool) -> int:
 		return self._ppo_agent.observe(reward, terminal)
 
-	def save(self, path: str, identifier: int) -> None:
+	def save(self, path: str, identifier: str) -> None:
 		self._ppo_agent.save(
 			directory=path,
-			filename='-'.join((OurProximalPolicyAgent.NAME, str(identifier))),
+			filename='-'.join((OurProximalPolicyAgent.NAME, identifier)),
 			format='numpy',
 			append='episodes')
 
@@ -163,6 +173,7 @@ class NonAgent(Agent):
 
 	def __init__(self, m: int, n: int, maintenance_interval: int) -> None:
 		super(NonAgent, self).__init__(m, n)
+		print('NonAgent: Got m=%d, n=%d, maintain_int=%d' % (m, n, maintenance_interval))
 		self._maintenance_interval = maintenance_interval
 		self._action_interval: int = 0
 
@@ -178,5 +189,5 @@ class NonAgent(Agent):
 	def observe(self, reward: float, terminal: bool) -> int:
 		return NonAgent._NUM_PERFORMED_UPDATES
 
-	def save(self, path: str, identifier: int) -> None:
+	def save(self, path: str, identifier: str) -> None:
 		pass  # silently skip saving

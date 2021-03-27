@@ -11,9 +11,10 @@ from typing import cast, Any, Dict, List, Set, Tuple, Type
 class NetworkSpecification:
 
 	_LAYER_MINIMUM: int = 2
+	_DENSE_NUM_NODES: int = 10
+	_ACTIVATION: str = 'relu'
+	_LSTM_NUM_NODES: int = 10
 	_LSTM_HORIZON: int = int(1e1)  # Steps of temporal back-propagation. Makes back-propagation through time feasible.
-	_DENSE_NUM_NODES: int = 64
-	_DENSE_ACTIVATION: str = 'relu'
 
 	class NetworkType(Enum):
 		FEED_FORWARD = 'feed-forward'
@@ -31,16 +32,18 @@ class NetworkSpecification:
 		mdl: TensorForceModel = {'network': layers}
 		if self._max_pooling:
 			layers.append({'type': 'pooling', 'reduction': 'max'})
-		if self._net_type == NetworkSpecification.NetworkType.RECURRENT:
-			layers.append({'type': 'rnn', 'cell': 'lstm', 'horizon': NetworkSpecification._LSTM_HORIZON})
-		else:
+		if self._net_type == NetworkSpecification.NetworkType.FEED_FORWARD:
 			layers.append({
 				'type': 'dense', 'size': NetworkSpecification._DENSE_NUM_NODES,
-				'activation': NetworkSpecification._DENSE_ACTIVATION})
+				'activation': NetworkSpecification._ACTIVATION})
 		for _ in range(self._num_layers - NetworkSpecification._LAYER_MINIMUM):
 			layers.append({
 				'type': 'dense', 'size': NetworkSpecification._DENSE_NUM_NODES,
-				'activation': NetworkSpecification._DENSE_ACTIVATION})
+				'activation': NetworkSpecification._ACTIVATION})
+		if self._net_type == NetworkSpecification.NetworkType.RECURRENT:
+			layers.append({
+				'type': 'rnn', 'cell': 'lstm', 'size': NetworkSpecification._LSTM_NUM_NODES,
+				'activation': NetworkSpecification._ACTIVATION, 'horizon': NetworkSpecification._LSTM_HORIZON})
 		return mdl
 
 	def __str__(self) -> str:
@@ -53,7 +56,10 @@ NetworkParameterization = Tuple[NetworkSpecification.NetworkType, int, bool]
 
 class AgentSpecification:
 
+	_REQUIRE_ENVIRONMENT_INFO: Tuple[Type[Agent], ...] = (OurTensorForceAgent, OurProximalPolicyAgent)
+	_REQUIRE_LEARNING_RATE: Tuple[Type[Agent], ...] = (OurTensorForceAgent, OurProximalPolicyAgent)
 	_REQUIRE_GRADIENT_CLIPPING: Tuple[Type[Agent], ...] = (OurTensorForceAgent,)
+	_REQUIRE_MODEL: Tuple[Type[Agent], ...] = (OurTensorForceAgent, OurProximalPolicyAgent)
 
 	def __init__(self, agent: Type[Agent], params: AgentParameterMap) -> None:
 		self._type = agent
@@ -62,18 +68,28 @@ class AgentSpecification:
 	def complete_specification(
 			self,
 			env_spec: Dict[str, Any],
-			model: NetworkSpecification,
-			gradient_clipping: bool) -> None:
+			learning_rate: float,
+			gradient_clipping: bool,
+			model: NetworkSpecification,) -> None:
 		d: Dict[str, Any] = {'m': env_spec['m'], 'n': env_spec['n']}
+		# add environment information
 		keys: Tuple[str, ...] = tuple()
-		if self._type in (OurTensorForceAgent, OurProximalPolicyAgent):
+		if self._type in AgentSpecification._REQUIRE_ENVIRONMENT_INFO:
 			keys += 'breach_level', 'delta_t'
 		for key in keys:
 			d[key] = env_spec[key]
 		self.params.update(d)
-		self.params.update({'model': model.build()})
+		if self._type in AgentSpecification._REQUIRE_LEARNING_RATE:
+			self.params.update({'learning_rate': learning_rate})
+		# set gradient clipping
 		if self._type in AgentSpecification._REQUIRE_GRADIENT_CLIPPING:
 			self.params.update({'use_gradient_clipping': gradient_clipping})
+		# add the network
+		if self._type == AgentSpecification._REQUIRE_MODEL[0]:
+			self.params.update({'model': model.build()})
+		elif self._type == AgentSpecification._REQUIRE_MODEL[1]:
+			mdl: TensorForceModel = model.build()
+			self.params.update({'model': {'type': 'layered', 'layers': mdl['network']}})
 
 	def build(self) -> Agent:
 		return self._type(**self.params)
@@ -132,8 +148,8 @@ class Configuration:
 		env_dict: Dict[str, Any] = cp.deepcopy(env_spec)
 		env_dict.update({'reward_fn': self._reward_fn})
 		env_agent_spec = cp.deepcopy(self._agent_spec)
-		env_agent_spec.complete_specification(env_spec, self._network_spec, self._gradient_clipping)
-		print('Agent parameters now: %s.' % (str(env_agent_spec.params),))
+		env_agent_spec.complete_specification(
+			env_spec, self._learning_rate, self._gradient_clipping, self._network_spec)
 		return Environment(**env_dict), env_agent_spec.build()
 
 	def __str__(self) -> str:

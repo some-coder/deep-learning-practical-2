@@ -92,8 +92,11 @@ class Environment:
 		return True
 
 	def get_reward(self) -> float:
+		# print('Our reward function: %s.' % (str(Environment.RewardFunction.STANDARD),))
 		if self.reward_fn == Environment.RewardFunction.STANDARD:
-			return self.reward_base ** (self.max_reward - self.current_reward + self.current_cum_time)
+			rew = self.reward_base ** (self.max_reward - self.current_reward + self.current_cum_time)
+			# print('Reward: %.3lf' % (rew,))
+			return rew
 		else:
 			raise NotImplementedError('Reward function \'%s\' not implemented (yet).' % (str(self.reward_fn),))
 

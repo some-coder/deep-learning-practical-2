@@ -5,9 +5,10 @@ import re
 import socket
 import time
 
-from agent import Agent
+from agent import Agent, OurProximalPolicyAgent
 from environment import Environment
-from typing import List, Optional, Tuple
+from parameter_grid import Configuration
+from typing import cast, List, Optional, Tuple
 
 
 class Runner:
@@ -34,7 +35,7 @@ class Runner:
 
 	@staticmethod
 	def _make_save_dir_if_non_existent() -> None:
-		paths: Tuple[str, ...] = tuple(Runner.SAVE_PATH + p for p in ('', Runner._AGENT_DIR, Runner._RESULTS_DIR))
+		paths: Tuple[str, ...] = tuple(Runner.SAVE_PATH + p for p in (Runner._AGENT_DIR, Runner._RESULTS_DIR))
 		for path in paths:
 			try:
 				os.mkdir(path)
@@ -64,7 +65,7 @@ class Runner:
 	def run(
 			env: Environment,
 			agn: Agent,
-			identifier: int,
+			identifier: str,
 			time_steps: int = int(1e4),
 			save_agent: bool = False,
 			save_interval: Optional[int] = int(1e1),
@@ -89,11 +90,19 @@ class Runner:
 			Runner._set_save_path()
 			Runner._make_save_dir_if_non_existent()
 
+		# ensure Proximal Policy Agents are configured correctly
+		if type(agn) == OurProximalPolicyAgent:
+			prx_pol_agn = cast(OurProximalPolicyAgent, agn)  # only used for the ensuing check
+			if prx_pol_agn.timeout_time < time_steps:
+				msg: str = 'This run\'s OurProximalPolicyAgent can handle up until %d time steps, ' % \
+					(prx_pol_agn.timeout_time,)
+				msg += 'but the run goes further: up until %d time steps.' % (time_steps,)
+				raise ValueError(msg)
+
 		t: float = 0.0  # continuous, environment-bound time
 		deterioration_df = pd.DataFrame(columns=Runner._deterioration_df_column_names(env.m, env.n))
 		rewards_df = pd.DataFrame(columns=Runner._REWARDS_COLUMNS)
 
-		print('Training agent \'%s\'...' % (agn.NAME,))
 		start_clock_time: float = time.time()
 		rewards: List[float] = []
 		for time_step in range(time_steps):  # discrete, runner-bound time
@@ -120,8 +129,7 @@ class Runner:
 
 			if info_interval is not None and time_step % info_interval == 0:
 				print('\t[time step] %5d ' % (time_step,), end='')
-				print('\t[mean reward] %.3lf.' % (rewards_df.loc[len(rewards_df) - 1, :]['mean'],))
-		print('Training agent \'%s\' done.' % (agn.NAME,))
+				print('\t[mean reward] %.3lf' % (rewards_df.loc[len(rewards_df) - 1, :]['mean'],))
 
 		if save_agent:
 			print('Saving agent... ', end='')
@@ -131,8 +139,20 @@ class Runner:
 		deterioration_df.convert_dtypes()
 		rewards_df.convert_dtypes()
 		deterioration_df.to_csv(
-			path_or_buf=Runner.SAVE_PATH + Runner._RESULTS_DIR + '/det-' + str(identifier),
+			path_or_buf=Runner.SAVE_PATH + Runner._RESULTS_DIR + '/det-' + identifier + '.csv',
 			index=False)
 		rewards_df.to_csv(
-			path_or_buf=Runner.SAVE_PATH + Runner._RESULTS_DIR + '/rew-' + str(identifier),
+			path_or_buf=Runner.SAVE_PATH + Runner._RESULTS_DIR + '/rew-' + identifier + '.csv',
+			index=False)
+
+	@staticmethod
+	def save_experiment_identifiers(
+			experiment_tag: str,
+			configurations: Tuple[Configuration, ...],
+			associated_ids: List[int]) -> None:
+		df = pd.DataFrame(columns=('id', 'configuration'))
+		for index, con in enumerate(configurations):
+			df.loc[len(df), :] = [associated_ids[index], str(con)]
+		df.to_csv(
+			path_or_buf=Runner.SAVE_PATH + Runner._RESULTS_DIR + '/ids-' + experiment_tag + '.csv',
 			index=False)
