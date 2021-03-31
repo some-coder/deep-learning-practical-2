@@ -1,6 +1,6 @@
 from typing import Any, Dict
 
-from agent import NonAgent, OurProximalPolicyAgent, OurTensorForceAgent
+from agent import NonAgent, OurProximalPolicyAgent, OurTensorForceAgent, RandomAgent
 from environment import Environment
 from parameter_grid import configuration_grid, network_specification_grid, NetworkSpecification
 from runner import Runner
@@ -14,7 +14,8 @@ if __name__ == '__main__':
 		gradient_clipping_options={True},
 		# Note: not all parameters need to be supplied. See ``parameter_grid.Configuration`` for details.
 		apm_pairs=(
-			(NonAgent, {'maintenance_interval': 5}),
+			(RandomAgent, {}),
+			(NonAgent, {'maintenance_interval': 0.5}),
 			(OurTensorForceAgent, {'save_path': '.'}),
 			(OurProximalPolicyAgent, {
 				'timeout_time': timeout_time, 'save_path': '.'})),

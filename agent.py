@@ -1,5 +1,5 @@
 import numpy as np
-
+from random import Random
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple, Type
 
@@ -21,7 +21,7 @@ class Agent(ABC):
 		self._n = n
 
 	@abstractmethod
-	def act(self, states: Any, time: int) -> List[Action]:
+	def act(self, states: Any) -> List[Action]:
 		pass
 
 	@abstractmethod
@@ -92,7 +92,7 @@ class OurTensorForceAgent(Agent):
 				'directory': self._save_path, 'file_name': OurTensorForceAgent._SAVE_NAME,
 				'frequency': OurTensorForceAgent._SAVING_FREQUENCY})
 
-	def act(self, states: Any, time: int) -> Any:
+	def act(self, states: Any) -> Any:
 		return self._tensor_force_agent.act(states=states).tolist()
 
 	def observe(self, reward: float, terminal: bool) -> int:
@@ -150,7 +150,7 @@ class OurProximalPolicyAgent(Agent):
 				'directory': self._save_path, 'filename': OurProximalPolicyAgent._SAVE_NAME,
 				'frequency': OurProximalPolicyAgent._SAVING_FREQUENCY})
 
-	def act(self, states: Any, time: int) -> List[Action]:
+	def act(self, states: Any) -> List[Action]:
 		out = self._ppo_agent.act(states=states)
 		return out.tolist()
 
@@ -173,19 +173,42 @@ class NonAgent(Agent):
 		super(NonAgent, self).__init__(m, n)
 		print('NonAgent: Got m=%d, n=%d, maintain_int=%d' % (m, n, maintenance_interval))
 		self._maintenance_interval = maintenance_interval
-		self._action_interval: int = 0
 
-	def act(self, states: Any, time: int) -> List[Action]:
-		actions: List[int]
-		if time >= self._action_interval:
-			actions = [1] * (self._m + self._n)
-			self._action_interval = time + self._maintenance_interval
-		else:
-			actions = [0] * (self._m + self._n)
+	def act(self, states: Any) -> List[Action]:
+		actions: List[int] = list()
+		for i, x_t in enumerate(states):
+			if x_t >= self._maintenance_interval:
+				actions.append(1)
+			else:
+				actions.append(0)
 		return actions
 
 	def observe(self, reward: float, terminal: bool) -> int:
 		return NonAgent._NUM_PERFORMED_UPDATES
+
+	def save(self, path: str, identifier: str) -> None:
+		pass  # silently skip saving
+
+class RandomAgent(Agent):
+
+	_NUM_PERFORMED_UPDATES: int = 0  # this agent never updates itself
+
+	def __init__(self, m: int, n: int) -> None:
+		super(RandomAgent, self).__init__(m, n)
+		print('RandomAgent: hi there, i am just lucky')
+		self._action_interval: int = 0
+		self.random_generator: Random = Random()
+		self.random_generator.seed(999999)
+
+	def act(self, states: Any) -> List[Action]:
+		actions = list()
+		for _ in range(0, (self._m + self._n)):
+			action = self.random_generator.randint(0, 1)
+			actions.append(action)
+		return actions
+
+	def observe(self, reward: float, terminal: bool) -> int:
+		return RandomAgent._NUM_PERFORMED_UPDATES
 
 	def save(self, path: str, identifier: str) -> None:
 		pass  # silently skip saving

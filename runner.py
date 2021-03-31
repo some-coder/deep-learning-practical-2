@@ -19,7 +19,7 @@ class Runner:
 	_AGENT_DIR: str = 'agent'
 	_RESULTS_DIR: str = 'results'
 
-	_REWARDS_COLUMNS: Tuple[str, ...] = ('time_step', 'clock_time', 'min', 'quartile_1', 'mean', 'quartile_3', 'max')
+	_REWARDS_COLUMNS: Tuple[str, ...] = ('time_step', 'clock_time', 'min_reward', 'quartile_1_reward', 'mean_reward', 'quartile_3_reward', 'max_reward', 'min_cost', 'quartile_1_cost', 'mean_cost', 'quartile_3_cost', 'max_cost')
 
 	@staticmethod
 	def _should_set_save_path() -> bool:
@@ -54,12 +54,17 @@ class Runner:
 		return [float(time_step)] + state
 
 	@staticmethod
-	def _rewards_df_row(time_step: int, clock_time: float, rewards: List[float]) -> List[float]:
+	def _rewards_df_row(time_step: int, clock_time: float, rewards: List[float], real_cost: List[float],) -> List[float]:
+		# reward
 		rewards_arr: np.ndarray = np.array(rewards)
-		quantiles: np.ndarray = np.quantile(a=rewards_arr, q=[0.25, 0.75])
+		quantiles_reward: np.ndarray = np.quantile(a=rewards_arr, q=[0.25, 0.75])
+		# cost
+		cost_arr: np.ndarray = np.array(real_cost)
+		quantiles_cost: np.ndarray = np.quantile(a=cost_arr, q=[0.25, 0.75])
 		return [
-			float(time_step), clock_time, np.min(rewards_arr), quantiles[0], rewards_arr.mean(), quantiles[1],
-			np.max(rewards_arr)]
+			float(time_step), clock_time, np.min(rewards_arr), quantiles_reward[0], rewards_arr.mean(), quantiles_reward[1],
+			np.max(rewards_arr), np.min(cost_arr), quantiles_cost[0], cost_arr.mean(), quantiles_cost[1],
+			np.max(cost_arr), ]
 
 	@staticmethod
 	def run(
@@ -105,12 +110,15 @@ class Runner:
 
 		start_clock_time: float = time.time()
 		rewards: List[float] = []
+		real_cost: List[float] = []
 		for time_step in range(time_steps):  # discrete, runner-bound time
 			# conduct the main reinforcement-learning loop
 			state = env.observe_state()
-			actions = agn.act(states=np.array(state), time=time_step)
+			actions = agn.act(states=np.array(state))
 			_ = env.take_action(actions=actions)
-			rewards.append(env.get_reward())
+			cost, reward = env.get_reward()
+			real_cost.append(cost)
+			rewards.append(reward)
 			agn.observe(reward=rewards[-1], terminal=False)
 			t += env.delta_t
 
@@ -124,12 +132,13 @@ class Runner:
 				deterioration_df.loc[len(deterioration_df), :] = \
 					Runner._deterioration_df_row(time_step, state)
 				rewards_df.loc[len(rewards_df), :] = \
-					Runner._rewards_df_row(time_step, delta_clock_time, rewards)
+					Runner._rewards_df_row(time_step, delta_clock_time, rewards, real_cost)
 				rewards = []  # reset for a new batch
+				real_cost = []
 
 			if info_interval is not None and time_step % info_interval == 0:
 				print('\t[time step] %5d ' % (time_step,), end='')
-				print('\t[mean reward] %.3lf' % (rewards_df.loc[len(rewards_df) - 1, :]['mean'],))
+				print(f'\t[mean reward & cost] {rewards_df.loc[len(rewards_df) - 1, "mean_reward"]:.3f}, {rewards_df.loc[len(rewards_df) - 1, "mean_cost"]:.3f}')
 
 		if save_agent:
 			print('Saving agent... ', end='')

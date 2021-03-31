@@ -1,7 +1,7 @@
 import random
 
 from enum import Enum
-from typing import List
+from typing import List, Tuple
 
 
 class Environment:
@@ -62,7 +62,7 @@ class Environment:
 
 		self.actions_1 = [0]
 		self.actions_2 = [0]
-		self.current_reward = 0
+		self.current_cost = 0
 		self.current_cum_time = 0
 
 		# set seed
@@ -91,12 +91,12 @@ class Environment:
 		self.update_state()
 		return True
 
-	def get_reward(self) -> float:
+	def get_reward(self) -> Tuple[int, float]:
 		# print('Our reward function: %s.' % (str(Environment.RewardFunction.STANDARD),))
 		if self.reward_fn == Environment.RewardFunction.STANDARD:
-			rew = self.reward_base ** (self.max_reward - self.current_reward + self.current_cum_time)
+			rew = self.reward_base ** (self.max_reward - self.current_cost + self.current_cum_time)
 			# print('Reward: %.3lf' % (rew,))
-			return rew
+			return self.current_cost, rew
 		else:
 			raise NotImplementedError('Reward function \'%s\' not implemented (yet).' % (str(self.reward_fn),))
 
@@ -177,7 +177,7 @@ class Environment:
 			cost += self.c_s
 
 		# update rewards
-		self.current_reward = cost
+		self.current_cost = cost
 		if time > 0:
 			self.current_cum_time = time / (sum(self.actions_1) + sum(self.actions_2)) # mbtf = mean time between failure
 
