@@ -1,8 +1,8 @@
 import copy as cp
 import itertools as it
 
-from agent import Agent, AgentParameterMap, AgentParameterMapPair, OurTensorForceAgent, \
-	OurProximalPolicyAgent, TensorForceModel
+from agent import Agent, AgentParameterMap, AgentParameterMapPair, NonAgent, OurTensorForceAgent, \
+	OurProximalPolicyAgent, RandomAgent, TensorForceModel
 from enum import Enum
 from environment import Environment
 from typing import cast, Any, Dict, List, Set, Tuple, Type
@@ -118,7 +118,8 @@ class Configuration:
 
 		* ``save_path`` for ``agent.OurTensorForceAgent``,
 		* ``timeout_time`` and ``save_path`` for ``agent.OurProximalPolicyAgent``,
-		* ``maintenance_interval`` for ``agent.NonAgent``.
+		* ``repair_threshold`` for ``agent.NonAgent``.
+		* No parameters need to be specified for ``agent.RandomAgent``.
 
 		:param reward_fn: The reward function to use. Options are listed in
 			<tt>environment.Environment.RewardFunction</tt>.
@@ -170,15 +171,50 @@ def network_specification_grid(
 	return tuple(NetworkSpecification(*net_par) for net_par in nss)
 
 
+def _configurations(
+		reward_functions: Set[Environment.RewardFunction],
+		learning_rates: Set[float],
+		gradient_clipping_options: Set[bool],
+		apm_pair: AgentParameterMapPair,
+		net_specs: Tuple[NetworkSpecification, ...]) -> Tuple[Configuration, ...]:
+	"""
+	Yields the configurations appropriate for the supplied agent-parametrisation pair.
+
+	This method explicitly does not vary in axes that the agent is not receptive to.
+	For instance, a ``agent.RandomAgent`` does nothing with a network model. This method
+	thus does not provide said agent with multiple models, even though you may have
+	specified multiple network specifications.
+
+	:param reward_functions: The reward functions to vary with.
+	:param learning_rates: The learning rates to vary with.
+	:param gradient_clipping_options: The learning rate setting variations.
+	:param apm_pair: A single agent-parametrisation pair.
+	:param net_specs: The network specifications to vary with.
+	:return: The configurations appropriate for this agent type.
+	"""
+	single_lr: Tuple[float] = (list(learning_rates)[0],)
+	single_gc: Tuple[bool] = (list(gradient_clipping_options)[0],)
+	single_ns: Tuple[NetworkSpecification] = (net_specs[0],)
+	if apm_pair[0] in (OurTensorForceAgent,):
+		# yield a full Cartesian product
+		return tuple(it.product(reward_functions, learning_rates, gradient_clipping_options, (apm_pair,), net_specs))
+	elif apm_pair[0] in (OurProximalPolicyAgent,):
+		# drop variation in gradient clipping
+		return tuple(it.product(reward_functions, learning_rates, single_gc, (apm_pair,), net_specs))
+	elif apm_pair[0] in (NonAgent, RandomAgent):
+		# only vary the reward function
+		return tuple(it.product(reward_functions, single_lr, single_gc, (apm_pair,), single_ns))
+
+
 def configuration_grid(
 		reward_functions: Set[Environment.RewardFunction],
 		learning_rates: Set[float],
 		gradient_clipping_options: Set[bool],
 		apm_pairs: Tuple[AgentParameterMapPair, ...],
-		net_specs: Tuple[NetworkSpecification]) -> Tuple[Configuration, ...]:
-	cps = cast(
-		Tuple[ConfigurationParameterization, ...],
-		tuple(it.product(reward_functions, learning_rates, gradient_clipping_options, apm_pairs, net_specs)))
+		net_specs: Tuple[NetworkSpecification, ...]) -> Tuple[Configuration, ...]:
+	cps: Tuple[ConfigurationParameterization, ...] = tuple()
+	for apm_pair in apm_pairs:
+		cps += _configurations(reward_functions, learning_rates, gradient_clipping_options, apm_pair, net_specs)
 	out: Tuple[Configuration, ...] = tuple()
 	for con_par in cps:
 		ag_sp = AgentSpecification(con_par[3][0], con_par[3][1])

@@ -1,4 +1,3 @@
-import numpy as np
 from random import Random
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple, Type
@@ -66,7 +65,6 @@ class OurTensorForceAgent(Agent):
 			save_path: str,
 			model: TensorForceModel) -> None:
 		super(OurTensorForceAgent, self).__init__(m, n)
-		print('TensorForceAgent: Got learning rate %.3lf' % (learning_rate,))
 		self._breach_level = breach_level
 		self._delta_t = delta_t
 		self._save_path = save_path
@@ -130,7 +128,6 @@ class OurProximalPolicyAgent(Agent):
 			save_path: str,
 			model: TensorForceModel) -> None:
 		super(OurProximalPolicyAgent, self).__init__(m, n)
-		print('PPO: Got learning rate: %.3lf' % (learning_rate,))
 		self._breach_level = breach_level
 		self._delta_t = delta_t
 		self.timeout_time = timeout_time
@@ -169,15 +166,14 @@ class NonAgent(Agent):
 
 	_NUM_PERFORMED_UPDATES: int = 0  # this agent never updates itself
 
-	def __init__(self, m: int, n: int, maintenance_interval: int) -> None:
+	def __init__(self, m: int, n: int, repair_threshold: int) -> None:
 		super(NonAgent, self).__init__(m, n)
-		print('NonAgent: Got m=%d, n=%d, maintain_int=%d' % (m, n, maintenance_interval))
-		self._maintenance_interval = maintenance_interval
+		self._repair_threshold = repair_threshold
 
 	def act(self, states: Any) -> List[Action]:
 		actions: List[int] = list()
 		for i, x_t in enumerate(states):
-			if x_t >= self._maintenance_interval:
+			if x_t >= self._repair_threshold:
 				actions.append(1)
 			else:
 				actions.append(0)
@@ -189,13 +185,13 @@ class NonAgent(Agent):
 	def save(self, path: str, identifier: str) -> None:
 		pass  # silently skip saving
 
+
 class RandomAgent(Agent):
 
 	_NUM_PERFORMED_UPDATES: int = 0  # this agent never updates itself
 
 	def __init__(self, m: int, n: int) -> None:
 		super(RandomAgent, self).__init__(m, n)
-		print('RandomAgent: hi there, i am just lucky')
 		self._action_interval: int = 0
 		self.random_generator: Random = Random()
 		self.random_generator.seed(999999)

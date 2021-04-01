@@ -11,11 +11,11 @@ if __name__ == '__main__':
 	grid = configuration_grid(
 		reward_functions={Environment.RewardFunction.STANDARD},
 		learning_rates={1e-2, 1e-3},
-		gradient_clipping_options={True},
+		gradient_clipping_options={False, True},
 		# Note: not all parameters need to be supplied. See ``parameter_grid.Configuration`` for details.
 		apm_pairs=(
 			(RandomAgent, {}),
-			(NonAgent, {'maintenance_interval': 0.5}),
+			(NonAgent, {'repair_threshold': 0.5}),
 			(OurTensorForceAgent, {'save_path': '.'}),
 			(OurProximalPolicyAgent, {
 				'timeout_time': timeout_time, 'save_path': '.'})),

@@ -19,7 +19,11 @@ class Runner:
 	_AGENT_DIR: str = 'agent'
 	_RESULTS_DIR: str = 'results'
 
-	_REWARDS_COLUMNS: Tuple[str, ...] = ('time_step', 'clock_time', 'min_reward', 'quartile_1_reward', 'mean_reward', 'quartile_3_reward', 'max_reward', 'min_cost', 'quartile_1_cost', 'mean_cost', 'quartile_3_cost', 'max_cost')
+	_REWARDS_COLUMNS: Tuple[str, ...] = \
+		(
+			'time_step', 'clock_time', 'min_reward', 'quartile_1_reward', 'mean_reward', 'quartile_3_reward',
+			'max_reward', 'min_cost', 'quartile_1_cost', 'mean_cost', 'quartile_3_cost', 'max_cost'
+		)
 
 	@staticmethod
 	def _should_set_save_path() -> bool:
@@ -137,8 +141,10 @@ class Runner:
 				real_cost = []
 
 			if info_interval is not None and time_step % info_interval == 0:
-				print('\t[time step] %5d ' % (time_step,), end='')
-				print(f'\t[mean reward & cost] {rewards_df.loc[len(rewards_df) - 1, "mean_reward"]:.3f}, {rewards_df.loc[len(rewards_df) - 1, "mean_cost"]:.3f}')
+				print('\t[time step] %5d   [mean reward] %11.3f   [mean cost] %8.3f' % (
+						time_step,
+						rewards_df.loc[len(rewards_df) - 1, 'mean_reward'],
+						rewards_df.loc[len(rewards_df) - 1, 'mean_cost']))
 
 		if save_agent:
 			print('Saving agent... ', end='')
