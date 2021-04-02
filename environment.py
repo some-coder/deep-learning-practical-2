@@ -52,7 +52,7 @@ class Environment:
 		self.L = breach_level
 
 		self.max_reward = self.c_s + self.c_f + (self.c_cm * (self.n + self.m))
-		self.reward_base = 1.02
+		self.reward_base = 1.005
 		self.risk_taking = 0.5  # most reward at the mean deterioration
 
 		self.state_1_x_t: List[float] = [0.0] * self.m  # first dyke [X(t),...,]

@@ -12,7 +12,7 @@ start_time = time.time()
 
 # set the range of the experiments that needs to be run
 lower_limit = 0
-upper_limit = 1
+upper_limit = 18
 
 # activate the simulation (automatic model)
 Experiment_Manager(lower_limit, upper_limit)

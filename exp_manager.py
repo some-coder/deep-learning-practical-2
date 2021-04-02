@@ -30,7 +30,7 @@ class Experiment_Manager(object):
         :return: void
         """
         # use a loop to illiterate multiple experiments from the exp_dat list
-        timeout_time: int = int(1e4)  # Important: PPO as well as Runner need the *exact same* value!
+        timeout_time: int = int(1e6)  # Important: PPO as well as Runner need the *exact same* value!
         grid = configuration_grid(
             reward_functions={Environment.RewardFunction.STANDARD},
             learning_rates={1e-2, 1e-3},
@@ -38,16 +38,16 @@ class Experiment_Manager(object):
             # Note: not all parameters need to be supplied. See ``parameter_grid.Configuration`` for details.
             apm_pairs=(
                 (RandomAgent, {}),
-                (NonAgent, {'maintenance_interval': 0.1}),
-                (NonAgent, {'maintenance_interval': 0.2}),
-                (NonAgent, {'maintenance_interval': 0.3}),
-                (NonAgent, {'maintenance_interval': 0.4}),
-                (NonAgent, {'maintenance_interval': 0.5}),
-                (NonAgent, {'maintenance_interval': 0.6}),
-                (NonAgent, {'maintenance_interval': 0.7}),
-                (NonAgent, {'maintenance_interval': 0.8}),
-                (NonAgent, {'maintenance_interval': 0.9}),
-                (NonAgent, {'maintenance_interval': 1.0}),
+                (NonAgent, {'repair_threshold': 0.1}),
+                (NonAgent, {'repair_threshold': 0.2}),
+                (NonAgent, {'repair_threshold': 0.3}),
+                (NonAgent, {'repair_threshold': 0.4}),
+                (NonAgent, {'repair_threshold': 0.5}),
+                (NonAgent, {'repair_threshold': 0.6}),
+                (NonAgent, {'repair_threshold': 0.7}),
+                (NonAgent, {'repair_threshold': 0.8}),
+                (NonAgent, {'repair_threshold': 0.9}),
+                (NonAgent, {'repair_threshold': 1.0}),
                 (OurTensorForceAgent, {'save_path': '.'}),
                 (OurProximalPolicyAgent, {
                     'timeout_time': timeout_time, 'save_path': '.'})),
