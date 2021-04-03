@@ -30,7 +30,7 @@ class Experiment_Manager(object):
         :return: void
         """
         # use a loop to illiterate multiple experiments from the exp_dat list
-        timeout_time: int = int(1e6)  # Important: PPO as well as Runner need the *exact same* value!
+        timeout_time: int = int(8e5)  # Important: PPO as well as Runner need the *exact same* value!
         grid = configuration_grid(
             reward_functions={Environment.RewardFunction.STANDARD},
             learning_rates={1e-2, 1e-3},
@@ -61,11 +61,35 @@ class Experiment_Manager(object):
         experiment_tag: str = 'full_exp'
         # start running experiments
         print(f"there are: {len(grid)} experiments")
+
+        # quick fix for names
+        model_names = [
+            "RandomAgent",
+            "NonAgent_01",
+            "NonAgent_02",
+            "NonAgent_03",
+            "NonAgent_04",
+            "NonAgent_05",
+            "NonAgent_06",
+            "NonAgent_07",
+            "NonAgent_08",
+            "NonAgent_09",
+            "NonAgent_10",
+            "OurTensorForceAgent_1",
+            "OurTensorForceAgent_2",
+            "OurTensorForceAgent_3",
+            "OurTensorForceAgent_4",
+            "OurProximalPolicyAgent_1",
+            "OurProximalPolicyAgent_2",
+            "OurProximalPolicyAgent_3",
+            "OurProximalPolicyAgent_4",
+        ]
+
         for model_id, point in enumerate(grid[self.lower: (self.upper + 1)]):
             print('[MODEL %d/%d] %s.' % (model_id + 1, len(grid), str(point)))
             env, agn = point.build(env_spec)
             Runner.run(
-                env=env, agn=agn, identifier='_'.join((experiment_tag, str(model_id + 1))), save_agent=False,
+                env=env, agn=agn, identifier='_'.join((experiment_tag, str(model_names[self.lower + model_id]))), save_agent=False,
                 time_steps=timeout_time)
         print("experiment done, saving files")
         Runner.save_experiment_identifiers(experiment_tag, configurations=grid, associated_ids=list(range(len(grid))))
