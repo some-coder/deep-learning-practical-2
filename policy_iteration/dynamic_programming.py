@@ -1,7 +1,7 @@
 import numpy as np
 
 from environment import Action, Environment, Reward, State, TransitionProbability
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 
 class PolicyIterator:

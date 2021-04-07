@@ -127,7 +127,7 @@ if __name__ == '__main__':
 	dde = DiscreteDykeEnvironment(
 		dyke_lengths=(2, 2), k=5, breach_level=1.0,
 		reward_supplier=DiscreteDykeEnvironment.StandardDiscreteDykeRewardSupplier(
-			fixed=0.1, preventive=0.1, corrective=0.5, societal=2.0),
+			fixed=1e-2, preventive=1e-1, corrective=1e0, societal=1e2),
 		gamma_scale=0.4, gamma_shape=0.5)
 	pi = PolicyIterator(env=dde, discount=1e-1)
 	pi.iterate()
